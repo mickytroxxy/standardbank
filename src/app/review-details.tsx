@@ -2,31 +2,42 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { useState } from "react";
 import {
-    Alert,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View,
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { addTransaction, formatRand, updateBalances } from "@/api";
+import {
+  addTransaction,
+  formatRand,
+  formatVoucherNumber,
+  saveVoucher,
+  sendSms,
+  updateBalances,
+} from "@/api";
 import { Brand, Spacing } from "@/constants/theme";
 import { useAppDispatch, useAppSelector } from "@/store";
 import { setBalances } from "@/store/account-info-slice";
 import type { ProofMethod } from "./beneficiary-account";
 
 type Beneficiary = {
-  holderName: string;
-  bank: string;
-  branchName: string;
-  branchCode: string;
-  accountNumber: string;
-  theirRef: string;
-  myRef: string;
-  proof: ProofMethod;
-  save: boolean;
+  type?: "bank" | "cell";
+  holderName?: string;
+  bank?: string;
+  branchName?: string;
+  branchCode?: string;
+  accountNumber?: string;
+  theirRef?: string;
+  myRef?: string;
+  proof?: ProofMethod;
+  save?: boolean;
+  name?: string;
+  surname?: string;
+  phone?: string;
 };
 export type Payment = {
   beneficiary: Beneficiary;
@@ -37,6 +48,7 @@ export type Payment = {
   proof: ProofMethod;
   proofContact: string;
   theirName: string;
+  pin?: string;
 };
 
 const MONTHS = [
@@ -108,8 +120,14 @@ export default function ReviewDetailsScreen() {
   const insets = useSafeAreaInsets();
   const dispatch = useAppDispatch();
   const params = useLocalSearchParams<{ payment?: string }>();
-  const { phoneNumber, accountNumber, availableBalance, latestBalance } =
-    useAppSelector((s) => s.accountInfo);
+  const {
+    phoneNumber,
+    accountNumber,
+    availableBalance,
+    latestBalance,
+    firstName,
+    lastName,
+  } = useAppSelector((s) => s.accountInfo);
   const [submitting, setSubmitting] = useState(false);
 
   let payment: Payment;
@@ -119,7 +137,14 @@ export default function ReviewDetailsScreen() {
     payment = {} as Payment;
   }
   const ben = payment.beneficiary ?? ({} as Beneficiary);
-  const initial = (ben.holderName ?? "").trim().charAt(0).toUpperCase();
+  const isCell = ben.type === "cell";
+  const displayName = isCell
+    ? [ben.name, ben.surname].filter(Boolean).join(" ")
+    : (ben.holderName ?? "");
+  const displaySub = isCell ? (ben.phone ?? "") : (ben.accountNumber ?? "");
+  const initial = isCell
+    ? `${(ben.name ?? "").charAt(0)}${(ben.surname ?? "").charAt(0)}`.toUpperCase()
+    : displayName.trim().charAt(0).toUpperCase();
 
   async function handleConfirm() {
     if (
@@ -136,20 +161,54 @@ export default function ReviewDetailsScreen() {
     const date = `${d.getDate()} ${MONTHS[d.getMonth()]}`;
     const fullDate = `${d.getDate()} ${MONTHS_FULL[d.getMonth()]} ${d.getFullYear()}`;
     const time = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+    const voucherDate = `${String(d.getDate()).padStart(2, "0")} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+    const voucherNumber = isCell
+      ? Array.from({ length: 10 }, () => Math.floor(Math.random() * 10)).join(
+          "",
+        )
+      : "";
     try {
       await addTransaction(phoneNumber, {
         date,
         fullDate,
         time,
-        title: (ben.holderName ?? "").toUpperCase() || "PAYMENT",
-        sub: "IMMEDIATE PAYMENT",
+        title: displayName.toUpperCase() || "PAYMENT",
+        sub: isCell ? "INSTANT MONEY" : "IMMEDIATE PAYMENT",
         amount: `-${payment.amount.toFixed(2)}`,
-        beneficiaryName: ben.holderName ?? "",
-        account: ben.accountNumber ?? "",
+        beneficiaryName: displayName,
+        account: displaySub,
         myRef: payment.myRef ?? "",
         theirRef: payment.theirRef ?? "",
         runningBalance: formatRand(newLatest),
       });
+      if (isCell) {
+        await saveVoucher(phoneNumber, {
+          phone: ben.phone ?? "",
+          amount: payment.amount,
+          voucherNumber,
+          pin: payment.pin ?? "",
+          myRef: payment.myRef ?? "",
+          beneficiaryName: displayName,
+          date: voucherDate,
+        });
+        const smsBody = `Standard Bank: IM Voucher ${formatVoucherNumber(voucherNumber)}, R${payment.amount.toFixed(0)}. Download Instant Money App to redeem in Wallet or at PEP, Checkers, Shoprite. Ts&Cs apply. 0860466639`;
+        sendSms(ben.phone ?? "", smsBody).catch(() => {});
+      } else if (payment.proof === "SMS" && payment.proofContact) {
+        const senderName = [firstName, lastName]
+          .filter(Boolean)
+          .join(" ")
+          .toUpperCase();
+        const acctTail = (ben.accountNumber ?? "").slice(-4);
+        const isoDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+        const smsTime = `${String(d.getHours()).padStart(2, "0")}h${String(d.getMinutes()).padStart(2, "0")}`;
+        const yymmdd = `${String(d.getFullYear()).slice(-2)}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
+        const refId = Array.from({ length: 8 }, () =>
+          Math.floor(Math.random() * 10),
+        ).join("");
+        const ref = `${yymmdd}SBGRPP${refId}C${refId}`;
+        const smsBody = `Standard Bank - Payment from ${senderName} to Account: **${acctTail}. Amount R${payment.amount.toFixed(2)} on ${isoDate} at ${smsTime}. Ref ${ref}. Please check your account.`;
+        sendSms(payment.proofContact, smsBody).catch(() => {});
+      }
       await updateBalances(phoneNumber, newAvailable, newLatest);
       dispatch(
         setBalances({
@@ -162,6 +221,7 @@ export default function ReviewDetailsScreen() {
         params: {
           payment: JSON.stringify(payment),
           newAvailable: String(newAvailable),
+          voucherNumber,
         },
       });
     } catch (e) {
@@ -232,8 +292,11 @@ export default function ReviewDetailsScreen() {
               value={
                 availableBalance != null ? formatRand(availableBalance) : "—"
               }
+              last={isCell}
             />
-            <Row label="My reference" value={payment.myRef || "—"} last />
+            {!isCell && (
+              <Row label="My reference" value={payment.myRef || "—"} last />
+            )}
           </View>
         </View>
 
@@ -246,35 +309,44 @@ export default function ReviewDetailsScreen() {
               <Text style={styles.benAvatarText}>{initial || "?"}</Text>
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.benName}>{ben.holderName ?? "—"}</Text>
-              <Text style={styles.benNum}>{ben.accountNumber ?? "—"}</Text>
+              <Text style={styles.benName}>{displayName || "—"}</Text>
+              <Text style={styles.benNum}>{displaySub || "—"}</Text>
             </View>
           </View>
           <View style={styles.divider} />
           <View style={styles.rowsBlock}>
             <Row label="Amount" value={formatRand(payment.amount ?? 0)} />
-            <Row
-              label="Bank details"
-              lines={
-                [ben.bank, ben.branchName, ben.branchCode].filter(
-                  Boolean,
-                ) as string[]
-              }
-            />
-            <Row
-              label="Their reference"
-              value={payment.theirRef || "—"}
-              last={payment.proof === "None"}
-            />
-            {payment.proof !== "None" && (
+            {isCell ? (
               <>
-                <Row label="Proof of payment" value={payment.proof} />
-                <Row label="Their name" value={payment.theirName || "—"} />
+                <Row label="Cash collection PIN" value={payment.pin || "—"} />
+                <Row label="My reference" value={payment.myRef || "—"} last />
+              </>
+            ) : (
+              <>
                 <Row
-                  label={proofContactLabel(payment.proof)}
-                  value={payment.proofContact || "—"}
-                  last
+                  label="Bank details"
+                  lines={
+                    [ben.bank, ben.branchName, ben.branchCode].filter(
+                      Boolean,
+                    ) as string[]
+                  }
                 />
+                <Row
+                  label="Their reference"
+                  value={payment.theirRef || "—"}
+                  last={payment.proof === "None"}
+                />
+                {payment.proof !== "None" && (
+                  <>
+                    <Row label="Proof of payment" value={payment.proof} />
+                    <Row label="Their name" value={payment.theirName || "—"} />
+                    <Row
+                      label={proofContactLabel(payment.proof)}
+                      value={payment.proofContact || "—"}
+                      last
+                    />
+                  </>
+                )}
               </>
             )}
           </View>

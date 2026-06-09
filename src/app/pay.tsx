@@ -1,10 +1,13 @@
-import { useRouter, type Href } from "expo-router";
+import { useFocusEffect, useRouter, type Href } from "expo-router";
 import { SymbolView, type AndroidSymbol, type SFSymbol } from "expo-symbols";
+import { useCallback, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { fetchBeneficiaries, type SavedBeneficiary } from "@/api";
 import { BottomNav } from "@/components/bottom-nav";
 import { Brand, Spacing } from "@/constants/theme";
+import { useAppSelector } from "@/store";
 
 const PAY_ITEMS: {
   label: string;
@@ -32,38 +35,54 @@ const PAY_ITEMS: {
   { label: "Bills", ios: "doc.text", android: "receipt_long", badge: "NEW" },
 ];
 
-const BENS: {
-  month?: string;
-  initials: string;
+function displayFor(ben: SavedBeneficiary): {
   name: string;
   sub: string;
-  paid: string;
-}[] = [
-  {
-    month: "June 2026",
-    initials: "RI",
-    name: "RG INNOVATION",
-    sub: "Ref: MICKY",
-    paid: "Paid: R 200.00 on 01 Jun 20...",
-  },
-  {
-    month: "May 2026",
-    initials: "MM",
-    name: "Machaba Machaba",
-    sub: "+27 72 363 5446",
-    paid: "Paid: Unavailable on 23 May ...",
-  },
-  {
-    initials: "T",
-    name: "TYMEBANK",
-    sub: "Ref: MICKY",
-    paid: "Paid: R 18 300.00 on 21 May...",
-  },
-];
+  initials: string;
+} {
+  if (ben.type === "cell") {
+    const name = [ben.name, ben.surname].filter(Boolean).join(" ");
+    return {
+      name,
+      sub: ben.phone ?? "",
+      initials:
+        `${(ben.name ?? "").charAt(0)}${(ben.surname ?? "").charAt(0)}`.toUpperCase(),
+    };
+  }
+  return {
+    name: ben.holderName,
+    sub: ben.myRef ? `Ref: ${ben.myRef}` : (ben.bank ?? ""),
+    initials: (ben.holderName ?? "").trim().charAt(0).toUpperCase(),
+  };
+}
 
 export default function PayScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const phoneNumber = useAppSelector((s) => s.accountInfo.phoneNumber);
+  const [bens, setBens] = useState<SavedBeneficiary[]>([]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!phoneNumber) return;
+      let active = true;
+      fetchBeneficiaries(phoneNumber)
+        .then((list) => {
+          if (active) setBens(list);
+        })
+        .catch(() => undefined);
+      return () => {
+        active = false;
+      };
+    }, [phoneNumber]),
+  );
+
+  function payBen(ben: SavedBeneficiary) {
+    router.push({
+      pathname: "/payment-details",
+      params: { beneficiary: JSON.stringify(ben) },
+    });
+  }
 
   return (
     <View style={styles.container}>
@@ -146,24 +165,31 @@ export default function PayScreen() {
           <Text style={styles.addBenText}>Add a beneficiary</Text>
         </Pressable>
 
-        {BENS.map((ben) => (
-          <View key={ben.name}>
-            {ben.month ? <Text style={styles.month}>{ben.month}</Text> : null}
-            <View style={styles.benCard}>
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>{ben.initials}</Text>
-              </View>
-              <View style={styles.benInfo}>
-                <Text style={styles.benName}>{ben.name}</Text>
-                <Text style={styles.benSub}>{ben.sub}</Text>
-                <Text style={styles.benSub}>{ben.paid}</Text>
-              </View>
-              <View style={styles.payBtn}>
-                <Text style={styles.payBtnText}>PAY</Text>
-              </View>
-            </View>
-          </View>
-        ))}
+        {bens.length === 0 ? (
+          <Text style={styles.empty}>No beneficiaries saved yet.</Text>
+        ) : (
+          bens.map((ben) => {
+            const d = displayFor(ben);
+            return (
+              <Pressable
+                key={ben.id ?? d.name}
+                style={styles.benCard}
+                onPress={() => payBen(ben)}
+              >
+                <View style={styles.avatar}>
+                  <Text style={styles.avatarText}>{d.initials}</Text>
+                </View>
+                <View style={styles.benInfo}>
+                  <Text style={styles.benName}>{d.name}</Text>
+                  <Text style={styles.benSub}>{d.sub}</Text>
+                </View>
+                <Pressable style={styles.payBtn} onPress={() => payBen(ben)}>
+                  <Text style={styles.payBtnText}>PAY</Text>
+                </Pressable>
+              </Pressable>
+            );
+          })
+        )}
       </ScrollView>
 
       <BottomNav active="transact" />
@@ -265,4 +291,10 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.two,
   },
   payBtnText: { color: Brand.blue, fontSize: 14, fontWeight: "700" },
+  empty: {
+    textAlign: "center",
+    color: Brand.textMuted,
+    fontSize: 14,
+    paddingVertical: Spacing.three,
+  },
 });

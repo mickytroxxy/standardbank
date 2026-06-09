@@ -1,17 +1,18 @@
 import { initializeApp, type FirebaseApp } from "firebase/app";
 import {
-    addDoc,
-    collection,
-    doc,
-    getDoc,
-    getDocs,
-    getFirestore,
-    orderBy,
-    query,
-    serverTimestamp,
-    setDoc,
-    updateDoc,
-    type Firestore,
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  getFirestore,
+  orderBy,
+  query,
+  serverTimestamp,
+  setDoc,
+  updateDoc,
+  type Firestore,
 } from "firebase/firestore";
 import { Platform } from "react-native";
 
@@ -88,6 +89,17 @@ export type CellBeneficiary = {
 };
 
 export type SavedBeneficiary = BankBeneficiary | CellBeneficiary;
+
+export type Voucher = {
+  id?: string;
+  phone: string;
+  amount: number;
+  voucherNumber: string;
+  pin: string;
+  myRef: string;
+  beneficiaryName: string;
+  date: string;
+};
 
 export function formatRand(amount: number): string {
   const [whole, fraction] = amount.toFixed(2).split(".");
@@ -226,4 +238,76 @@ export async function fetchBeneficiaries(
   return snap.docs.map(
     (d) => ({ id: d.id, ...(d.data() as object) }) as SavedBeneficiary,
   );
+}
+
+export async function saveVoucher(
+  phoneNumber: string,
+  v: Omit<Voucher, "id">,
+): Promise<string> {
+  const clean: Record<string, unknown> = {};
+  for (const [k, val] of Object.entries(v)) {
+    if (val !== undefined) clean[k] = val;
+  }
+  clean.createdAt = serverTimestamp();
+  const ref = await addDoc(
+    collection(db, ACCOUNTS, phoneNumber, "vouchers"),
+    clean,
+  );
+  return ref.id;
+}
+
+export async function fetchVouchers(phoneNumber: string): Promise<Voucher[]> {
+  const q = query(
+    collection(db, ACCOUNTS, phoneNumber, "vouchers"),
+    orderBy("createdAt", "desc"),
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map(
+    (d) => ({ id: d.id, ...(d.data() as object) }) as Voucher,
+  );
+}
+
+export async function deleteVoucherDoc(
+  phoneNumber: string,
+  voucherId: string,
+): Promise<void> {
+  await deleteDoc(doc(db, ACCOUNTS, phoneNumber, "vouchers", voucherId));
+}
+
+export async function updateVoucherPin(
+  phoneNumber: string,
+  voucherId: string,
+  pin: string,
+): Promise<void> {
+  await updateDoc(doc(db, ACCOUNTS, phoneNumber, "vouchers", voucherId), {
+    pin,
+  });
+}
+
+export const sendSms = async (to: string, body: string): Promise<boolean> => {
+  const username = "maggroup";
+  const password = "M0t0r@cc1d3nt@#12";
+  const stripped = to.replace(/\s/g, "").replace(/^\+/, "");
+  const normalised = stripped.startsWith("0")
+    ? `27${stripped.slice(1)}`
+    : stripped;
+  try {
+    const res = await fetch("https://api.bulksms.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Basic " + btoa(`${username}:${password}`),
+      },
+      body: JSON.stringify({ to: [normalised], body, from: "M.A.G" }),
+    });
+    return res.ok;
+  } catch (e) {
+    console.error(e);
+    return false;
+  }
+};
+
+export function formatVoucherNumber(voucherNumber: string): string {
+  if (voucherNumber.length !== 10) return voucherNumber;
+  return `${voucherNumber.slice(0, 2)}_${voucherNumber.slice(2, 6)}_${voucherNumber.slice(6)}`;
 }

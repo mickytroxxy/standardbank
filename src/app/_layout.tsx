@@ -36,6 +36,7 @@ export default function RootLayout() {
             name="confirmation"
             options={{ gestureEnabled: false }}
           />
+          <Stack.Screen name="manage-vouchers" />
           <Stack.Screen name="buy" />
           <Stack.Screen name="airtime" />
           <Stack.Screen name="airtime-purchase" />

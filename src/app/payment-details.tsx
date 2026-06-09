@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -22,15 +22,19 @@ import type { ProofMethod } from "./beneficiary-account";
 const PROOF_METHODS: ProofMethod[] = ["None", "SMS", "Email", "Fax"];
 
 type Beneficiary = {
-  holderName: string;
-  bank: string;
-  branchName: string;
-  branchCode: string;
-  accountNumber: string;
-  theirRef: string;
-  myRef: string;
-  proof: ProofMethod;
-  save: boolean;
+  type?: "bank" | "cell";
+  holderName?: string;
+  bank?: string;
+  branchName?: string;
+  branchCode?: string;
+  accountNumber?: string;
+  theirRef?: string;
+  myRef?: string;
+  proof?: ProofMethod;
+  save?: boolean;
+  name?: string;
+  surname?: string;
+  phone?: string;
 };
 
 export default function PaymentDetailsScreen() {
@@ -48,6 +52,13 @@ export default function PaymentDetailsScreen() {
     ben = {} as Beneficiary;
   }
 
+  const isCell = ben.type === "cell";
+  const displayName = isCell
+    ? [ben.name, ben.surname].filter(Boolean).join(" ")
+    : (ben.holderName ?? "");
+  const displaySub = isCell ? (ben.phone ?? "") : (ben.accountNumber ?? "");
+  const displayBank = isCell ? "Instant Money" : (ben.bank ?? "");
+
   const [amount, setAmount] = useState("0.00");
   const [amountTouched, setAmountTouched] = useState(false);
   const [immediate, setImmediate] = useState(false);
@@ -55,18 +66,59 @@ export default function PaymentDetailsScreen() {
   const [theirRef, setTheirRef] = useState(ben.theirRef ?? "");
   const [proof, setProof] = useState<ProofMethod>(ben.proof ?? "SMS");
   const [proofOpen, setProofOpen] = useState(false);
-  const [proofContact, setProofContact] = useState("");
-  const [theirName, setTheirName] = useState(ben.holderName ?? "");
+  const [proofContact, setProofContact] = useState(
+    isCell ? (ben.phone ?? "") : "",
+  );
+  const [theirName, setTheirName] = useState(displayName);
+  const [pin, setPin] = useState(["", "", "", ""]);
+  const [acceptedTcs, setAcceptedTcs] = useState(false);
+  const pinRefs = useRef<Array<TextInput | null>>([null, null, null, null]);
 
-  const initial = (ben.holderName ?? "").trim().charAt(0).toUpperCase();
+  const initial = isCell
+    ? `${(ben.name ?? "").charAt(0)}${(ben.surname ?? "").charAt(0)}`.toUpperCase()
+    : displayName.trim().charAt(0).toUpperCase();
   const amountNum = parseFloat(amount.replace(/[^0-9.]/g, "")) || 0;
   const exceedsBalance = amountNum > (availableBalance ?? 0);
-  const canReview = amountNum > 0 && !exceedsBalance;
+  const pinComplete = pin.every((d) => d.length === 1);
+  const cellAmountValid =
+    amountNum >= 50 && amountNum <= 5000 && amountNum % 10 === 0;
+  const canReview = isCell
+    ? cellAmountValid && !exceedsBalance && pinComplete && acceptedTcs
+    : amountNum > 0 && !exceedsBalance;
   const errorText = exceedsBalance
     ? "Exceeds available balance"
     : amountTouched && amountNum === 0
       ? "Please enter an amount"
-      : null;
+      : isCell && amountTouched && !cellAmountValid
+        ? "Amount must be between R 50.00 and R 5 000.00 in denominations of R 10.00"
+        : null;
+
+  function setPinDigit(i: number, v: string) {
+    const digit = v.replace(/[^0-9]/g, "").slice(-1);
+    setPin((prev) => {
+      const next = [...prev];
+      next[i] = digit;
+      return next;
+    });
+    if (digit && i < 3) pinRefs.current[i + 1]?.focus();
+  }
+
+  function generatePin() {
+    let digits: number[] = [];
+    while (true) {
+      digits = Array.from({ length: 4 }, () => Math.floor(Math.random() * 10));
+      const consecutive = digits.every(
+        (d, i) => i === 0 || d === digits[i - 1] + 1,
+      );
+      const reverseConsecutive = digits.every(
+        (d, i) => i === 0 || d === digits[i - 1] - 1,
+      );
+      const hasRepeats = digits.some((d, i) => i > 0 && d === digits[i - 1]);
+      if (!consecutive && !reverseConsecutive && !hasRepeats) break;
+    }
+    setPin(digits.map(String));
+    pinRefs.current[3]?.blur();
+  }
 
   function handleReview() {
     if (!canReview) {
@@ -85,6 +137,7 @@ export default function PaymentDetailsScreen() {
           proof,
           proofContact,
           theirName,
+          pin: isCell ? pin.join("") : undefined,
         }),
       },
     });
@@ -133,8 +186,14 @@ export default function PaymentDetailsScreen() {
               availableBalance={availableBalance}
             />
             <View style={styles.eapRow}>
-              <Text style={styles.eapLabel}>Remaining EAP limit</Text>
-              <Text style={styles.eapValue}>R 49 980.00</Text>
+              <Text style={styles.eapLabel}>
+                {isCell
+                  ? "Remaining daily withdrawal limit"
+                  : "Remaining EAP limit"}
+              </Text>
+              <Text style={styles.eapValue}>
+                {isCell ? "R 10 000.00" : "R 49 980.00"}
+              </Text>
             </View>
           </View>
 
@@ -147,9 +206,9 @@ export default function PaymentDetailsScreen() {
                 <Text style={styles.benAvatarText}>{initial || "?"}</Text>
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.benName}>{ben.holderName ?? "—"}</Text>
-                <Text style={styles.benAcc}>{ben.accountNumber ?? "—"}</Text>
-                <Text style={styles.benBank}>{ben.bank ?? "—"}</Text>
+                <Text style={styles.benName}>{displayName || "—"}</Text>
+                <Text style={styles.benAcc}>{displaySub || "—"}</Text>
+                <Text style={styles.benBank}>{displayBank || "—"}</Text>
               </View>
             </View>
 
@@ -170,137 +229,217 @@ export default function PaymentDetailsScreen() {
             </View>
             {errorText && <Text style={styles.errorText}>{errorText}</Text>}
 
-            <View style={styles.toggleRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.toggleTitle}>Immediate payment</Text>
-                <Text style={styles.toggleSub}>
-                  You&apos;ll be charged a fee based on the payment amount
+            {isCell ? (
+              <>
+                <Text style={styles.denomHint}>
+                  R 50.00 to R 5 000.00 in denominations of R 10.00
                 </Text>
-              </View>
-              <View style={styles.infoDot}>
-                <Text style={styles.infoDotText}>i</Text>
-              </View>
-              <Switch
-                value={immediate}
-                onValueChange={setImmediate}
-                trackColor={{ false: Brand.divider, true: Brand.blue }}
-                thumbColor={Brand.white}
-                style={{ marginLeft: Spacing.two }}
-              />
-            </View>
 
-            <Text style={styles.fieldLabel}>My reference</Text>
-            <TextInput
-              style={styles.field}
-              value={myRef}
-              onChangeText={setMyRef}
-            />
-
-            <Text style={styles.fieldLabel}>Their reference</Text>
-            <TextInput
-              style={styles.field}
-              value={theirRef}
-              onChangeText={setTheirRef}
-            />
-
-            <Text style={styles.fieldLabel}>Proof of payment</Text>
-            <View>
-              <Pressable
-                style={styles.dropdownRow}
-                onPress={() => setProofOpen((v) => !v)}
-              >
-                <Text style={styles.dropdownValue}>{proof}</Text>
-                <SymbolView
-                  name={
-                    proofOpen
-                      ? {
-                          ios: "chevron.up",
-                          android: "keyboard_arrow_up",
-                          web: "keyboard_arrow_up",
-                        }
-                      : {
-                          ios: "chevron.down",
-                          android: "keyboard_arrow_down",
-                          web: "keyboard_arrow_down",
-                        }
-                  }
-                  size={20}
-                  tintColor={Brand.blue}
-                />
-              </Pressable>
-              {proofOpen && (
-                <View style={styles.dropdownMenu}>
-                  {PROOF_METHODS.map((m) => (
-                    <Pressable
-                      key={m}
-                      style={styles.dropdownItem}
-                      onPress={() => {
-                        setProof(m);
-                        setProofOpen(false);
-                      }}
-                    >
-                      <Text style={styles.dropdownItemText}>{m}</Text>
+                <View style={styles.pinCard}>
+                  <View style={styles.pinHeader}>
+                    <Text style={styles.pinTitle}>Cash Collection Pin</Text>
+                    <View style={styles.infoDot}>
+                      <Text style={styles.infoDotText}>i</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.pinSub}>
+                    Select a PIN or generate it (Remember to send the PIN if
+                    you&apos;re paying someone)
+                  </Text>
+                  <View style={styles.pinRow}>
+                    {pin.map((d, i) => (
+                      <TextInput
+                        key={i}
+                        ref={(r) => {
+                          pinRefs.current[i] = r;
+                        }}
+                        style={styles.pinInput}
+                        value={d}
+                        onChangeText={(v) => setPinDigit(i, v)}
+                        onKeyPress={({ nativeEvent }) => {
+                          if (
+                            nativeEvent.key === "Backspace" &&
+                            !pin[i] &&
+                            i > 0
+                          ) {
+                            pinRefs.current[i - 1]?.focus();
+                          }
+                        }}
+                        keyboardType="number-pad"
+                        maxLength={1}
+                        selectTextOnFocus
+                      />
+                    ))}
+                  </View>
+                  <View style={styles.pinFooter}>
+                    <Text style={styles.pinHint}>
+                      Avoid using consecutive numbers (1 2 3 4) or repeating
+                      numbers (1 2 2 4)
+                    </Text>
+                    <Pressable style={styles.generateBtn} onPress={generatePin}>
+                      <Text style={styles.generateBtnText}>GENERATE PIN</Text>
                     </Pressable>
-                  ))}
+                  </View>
+                  <View style={styles.tcsRow}>
+                    <Text style={styles.tcsText}>
+                      I accept the{" "}
+                      <Text style={styles.tcsLink}>terms &amp; conditions</Text>
+                    </Text>
+                    <Switch
+                      value={acceptedTcs}
+                      onValueChange={setAcceptedTcs}
+                      trackColor={{ false: Brand.divider, true: Brand.blue }}
+                      thumbColor={Brand.white}
+                    />
+                  </View>
                 </View>
-              )}
-            </View>
 
-            {proof === "SMS" && (
+                <Text style={styles.otherDetailsLabel}>Other details</Text>
+                <Text style={styles.fieldLabel}>My reference</Text>
+                <TextInput
+                  style={styles.field}
+                  value={myRef}
+                  onChangeText={setMyRef}
+                />
+              </>
+            ) : (
               <>
-                <Text style={styles.fieldLabel}>Cell phone number</Text>
-                <View style={styles.contactRow}>
-                  <TextInput
-                    style={[styles.field, { flex: 1, borderBottomWidth: 0 }]}
-                    value={proofContact}
-                    onChangeText={setProofContact}
-                    keyboardType="phone-pad"
-                  />
-                  <SymbolView
-                    name={{
-                      ios: "plus.circle",
-                      android: "add_circle",
-                      web: "add_circle",
-                    }}
-                    size={26}
-                    tintColor={Brand.blue}
+                <View style={styles.toggleRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.toggleTitle}>Immediate payment</Text>
+                    <Text style={styles.toggleSub}>
+                      You&apos;ll be charged a fee based on the payment amount
+                    </Text>
+                  </View>
+                  <View style={styles.infoDot}>
+                    <Text style={styles.infoDotText}>i</Text>
+                  </View>
+                  <Switch
+                    value={immediate}
+                    onValueChange={setImmediate}
+                    trackColor={{ false: Brand.divider, true: Brand.blue }}
+                    thumbColor={Brand.white}
+                    style={{ marginLeft: Spacing.two }}
                   />
                 </View>
-              </>
-            )}
-            {proof === "Email" && (
-              <>
-                <Text style={styles.fieldLabel}>Email address</Text>
-                <TextInput
-                  style={styles.field}
-                  value={proofContact}
-                  onChangeText={setProofContact}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-              </>
-            )}
-            {proof === "Fax" && (
-              <>
-                <Text style={styles.fieldLabel}>Fax number</Text>
-                <TextInput
-                  style={styles.field}
-                  value={proofContact}
-                  onChangeText={setProofContact}
-                  keyboardType="phone-pad"
-                />
-              </>
-            )}
 
-            {proof !== "None" && (
-              <>
-                <Text style={styles.fieldLabel}>Their name</Text>
+                <Text style={styles.fieldLabel}>My reference</Text>
                 <TextInput
                   style={styles.field}
-                  value={theirName}
-                  onChangeText={setTheirName}
+                  value={myRef}
+                  onChangeText={setMyRef}
                 />
+
+                <Text style={styles.fieldLabel}>Their reference</Text>
+                <TextInput
+                  style={styles.field}
+                  value={theirRef}
+                  onChangeText={setTheirRef}
+                />
+
+                <Text style={styles.fieldLabel}>Proof of payment</Text>
+                <View>
+                  <Pressable
+                    style={styles.dropdownRow}
+                    onPress={() => setProofOpen((v) => !v)}
+                  >
+                    <Text style={styles.dropdownValue}>{proof}</Text>
+                    <SymbolView
+                      name={
+                        proofOpen
+                          ? {
+                              ios: "chevron.up",
+                              android: "keyboard_arrow_up",
+                              web: "keyboard_arrow_up",
+                            }
+                          : {
+                              ios: "chevron.down",
+                              android: "keyboard_arrow_down",
+                              web: "keyboard_arrow_down",
+                            }
+                      }
+                      size={20}
+                      tintColor={Brand.blue}
+                    />
+                  </Pressable>
+                  {proofOpen && (
+                    <View style={styles.dropdownMenu}>
+                      {PROOF_METHODS.map((m) => (
+                        <Pressable
+                          key={m}
+                          style={styles.dropdownItem}
+                          onPress={() => {
+                            setProof(m);
+                            setProofOpen(false);
+                          }}
+                        >
+                          <Text style={styles.dropdownItemText}>{m}</Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  )}
+                </View>
+
+                {proof === "SMS" && (
+                  <>
+                    <Text style={styles.fieldLabel}>Cell phone number</Text>
+                    <View style={styles.contactRow}>
+                      <TextInput
+                        style={[
+                          styles.field,
+                          { flex: 1, borderBottomWidth: 0 },
+                        ]}
+                        value={proofContact}
+                        onChangeText={setProofContact}
+                        keyboardType="phone-pad"
+                      />
+                      <SymbolView
+                        name={{
+                          ios: "plus.circle",
+                          android: "add_circle",
+                          web: "add_circle",
+                        }}
+                        size={26}
+                        tintColor={Brand.blue}
+                      />
+                    </View>
+                  </>
+                )}
+                {proof === "Email" && (
+                  <>
+                    <Text style={styles.fieldLabel}>Email address</Text>
+                    <TextInput
+                      style={styles.field}
+                      value={proofContact}
+                      onChangeText={setProofContact}
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                    />
+                  </>
+                )}
+                {proof === "Fax" && (
+                  <>
+                    <Text style={styles.fieldLabel}>Fax number</Text>
+                    <TextInput
+                      style={styles.field}
+                      value={proofContact}
+                      onChangeText={setProofContact}
+                      keyboardType="phone-pad"
+                    />
+                  </>
+                )}
+
+                {proof !== "None" && (
+                  <>
+                    <Text style={styles.fieldLabel}>Their name</Text>
+                    <TextInput
+                      style={styles.field}
+                      value={theirName}
+                      onChangeText={setTheirName}
+                    />
+                  </>
+                )}
               </>
             )}
           </View>
@@ -488,5 +627,78 @@ const styles = StyleSheet.create({
     color: "#D32F2F",
     fontSize: 13,
     marginTop: Spacing.one,
+  },
+  denomHint: {
+    color: Brand.textMuted,
+    fontSize: 13,
+    marginTop: Spacing.two,
+  },
+  pinCard: {
+    backgroundColor: "#F1F3F6",
+    borderRadius: 6,
+    padding: Spacing.three,
+    marginTop: Spacing.three,
+  },
+  pinHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  pinTitle: { color: Brand.textDark, fontSize: 17, fontWeight: "500" },
+  pinSub: {
+    color: Brand.textDark,
+    fontSize: 13,
+    marginTop: Spacing.two,
+  },
+  pinRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: Spacing.four,
+    marginTop: Spacing.three,
+    marginBottom: Spacing.three,
+  },
+  pinInput: {
+    width: 32,
+    fontSize: 28,
+    color: Brand.textDark,
+    textAlign: "center",
+    paddingVertical: Spacing.one,
+    borderBottomWidth: 1,
+    borderBottomColor: Brand.textMuted,
+    fontWeight: "700",
+  },
+  pinFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.three,
+    marginTop: Spacing.two,
+  },
+  pinHint: { flex: 1, color: Brand.textDark, fontSize: 13 },
+  generateBtn: {
+    borderWidth: 1,
+    borderColor: Brand.blue,
+    borderRadius: 4,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+  },
+  generateBtnText: {
+    color: Brand.blue,
+    fontSize: 13,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+  },
+  tcsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: Spacing.three,
+  },
+  tcsText: { flex: 1, color: Brand.textDark, fontSize: 14 },
+  tcsLink: { color: Brand.blue },
+  otherDetailsLabel: {
+    color: Brand.blue,
+    fontSize: 15,
+    fontWeight: "500",
+    marginTop: Spacing.four,
   },
 });

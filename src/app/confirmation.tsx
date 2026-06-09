@@ -3,7 +3,7 @@ import { SymbolView } from "expo-symbols";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { formatRand } from "@/api";
+import { formatRand, formatVoucherNumber } from "@/api";
 import { Brand, Spacing } from "@/constants/theme";
 import { useAppSelector } from "@/store";
 import { proofContactLabel, type Payment } from "./review-details";
@@ -43,6 +43,7 @@ export default function ConfirmationScreen() {
   const params = useLocalSearchParams<{
     payment?: string;
     newAvailable?: string;
+    voucherNumber?: string;
   }>();
   const { accountNumber } = useAppSelector((s) => s.accountInfo);
 
@@ -53,7 +54,16 @@ export default function ConfirmationScreen() {
     payment = {} as Payment;
   }
   const ben = payment.beneficiary;
+  const isCell = ben?.type === "cell";
+  const displayName = isCell
+    ? [ben?.name, ben?.surname].filter(Boolean).join(" ")
+    : (ben?.holderName ?? "");
+  const displaySub = isCell ? (ben?.phone ?? "") : (ben?.accountNumber ?? "");
   const newAvailable = parseFloat(params.newAvailable ?? "0");
+  const voucherNumber = params.voucherNumber ?? "";
+  const formattedVoucher = voucherNumber
+    ? formatVoucherNumber(voucherNumber)
+    : "";
 
   function handleDone() {
     if (router.canDismiss()) router.dismissAll();
@@ -100,8 +110,14 @@ export default function ConfirmationScreen() {
             </Text>
           </View>
           <View style={styles.rowsBlock}>
-            <Row label="Available balance" value={formatRand(newAvailable)} />
-            <Row label="My reference" value={payment.myRef || "—"} last />
+            <Row
+              label="Available balance"
+              value={formatRand(newAvailable)}
+              last={isCell}
+            />
+            {!isCell && (
+              <Row label="My reference" value={payment.myRef || "—"} last />
+            )}
           </View>
         </View>
 
@@ -118,8 +134,8 @@ export default function ConfirmationScreen() {
               />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.benName}>{ben?.holderName ?? "—"}</Text>
-              <Text style={styles.benNum}>{ben?.accountNumber ?? "—"}</Text>
+              <Text style={styles.benName}>{displayName || "—"}</Text>
+              <Text style={styles.benNum}>{displaySub || "—"}</Text>
             </View>
             <SymbolView
               name={{
@@ -138,28 +154,38 @@ export default function ConfirmationScreen() {
           <View style={styles.divider} />
           <View style={styles.rowsBlock}>
             <Row label="Amount" value={formatRand(payment.amount ?? 0)} />
-            <Row
-              label="Bank details"
-              lines={
-                [ben?.bank, ben?.branchName, ben?.branchCode].filter(
-                  Boolean,
-                ) as string[]
-              }
-            />
-            <Row
-              label="Their reference"
-              value={payment.theirRef || "—"}
-              last={payment.proof === "None"}
-            />
-            {payment.proof !== "None" && (
+            {isCell ? (
               <>
-                <Row label="Proof of payment" value={payment.proof} />
-                <Row label="Their name" value={payment.theirName || "—"} />
+                <Row label="Voucher number" value={formattedVoucher || "—"} />
+                <Row label="Cash collection PIN" value={payment.pin || "—"} />
+                <Row label="My reference" value={payment.myRef || "—"} last />
+              </>
+            ) : (
+              <>
                 <Row
-                  label={proofContactLabel(payment.proof)}
-                  value={payment.proofContact || "—"}
-                  last
+                  label="Bank details"
+                  lines={
+                    [ben?.bank, ben?.branchName, ben?.branchCode].filter(
+                      Boolean,
+                    ) as string[]
+                  }
                 />
+                <Row
+                  label="Their reference"
+                  value={payment.theirRef || "—"}
+                  last={payment.proof === "None"}
+                />
+                {payment.proof !== "None" && (
+                  <>
+                    <Row label="Proof of payment" value={payment.proof} />
+                    <Row label="Their name" value={payment.theirName || "—"} />
+                    <Row
+                      label={proofContactLabel(payment.proof)}
+                      value={payment.proofContact || "—"}
+                      last
+                    />
+                  </>
+                )}
               </>
             )}
           </View>
@@ -167,10 +193,25 @@ export default function ConfirmationScreen() {
       </ScrollView>
 
       <View style={[styles.toast, { bottom: insets.bottom + Spacing.three }]}>
-        <Text style={styles.toastText}>
-          {payment.immediate ? "Immediate payment" : "Payment"} submitted
-          successfully
-        </Text>
+        {isCell ? (
+          <>
+            <Text style={styles.toastText}>Voucher created successfully</Text>
+            <Pressable
+              onPress={() => {
+                if (router.canDismiss()) router.dismissAll();
+                router.replace("/manage-vouchers");
+              }}
+              hitSlop={8}
+            >
+              <Text style={styles.toastLink}>View vouchers</Text>
+            </Pressable>
+          </>
+        ) : (
+          <Text style={styles.toastText}>
+            {payment.immediate ? "Immediate payment" : "Payment"} submitted
+            successfully
+          </Text>
+        )}
       </View>
     </View>
   );
@@ -274,6 +315,10 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.three + 2,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   toastText: { color: Brand.white, fontSize: 15 },
+  toastLink: { color: Brand.white, fontSize: 15, fontWeight: "700" },
 });

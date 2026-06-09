@@ -1,7 +1,8 @@
 import { useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
+  Animated,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -9,12 +10,128 @@ import {
   Text,
   TextInput,
   View,
+  type TextInputProps,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { saveBeneficiary, type CellBeneficiary } from "@/api";
 import { Brand, Spacing } from "@/constants/theme";
 import { useAppSelector } from "@/store";
+
+type FloatingFieldProps = {
+  label: string;
+  value: string;
+  onChangeText: (v: string) => void;
+  keyboardType?: TextInputProps["keyboardType"];
+  hint?: string;
+  rightAccessory?: React.ReactNode;
+  prefix?: string;
+};
+
+function FloatingLabelInput({
+  label,
+  value,
+  onChangeText,
+  keyboardType,
+  hint,
+  rightAccessory,
+  prefix,
+}: FloatingFieldProps) {
+  const [focused, setFocused] = useState(false);
+  const floated = focused || value.length > 0;
+  const anim = useRef(new Animated.Value(floated ? 1 : 0)).current;
+
+  useEffect(() => {
+    Animated.timing(anim, {
+      toValue: floated ? 1 : 0,
+      duration: 150,
+      useNativeDriver: false,
+    }).start();
+  }, [floated, anim]);
+
+  const labelTop = anim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [22, 0],
+  });
+  const labelSize = anim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [17, 12],
+  });
+  const labelColor = anim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [Brand.textMuted, Brand.textMuted],
+  });
+
+  return (
+    <View style={floatStyles.wrap}>
+      <Animated.Text
+        pointerEvents="none"
+        style={[
+          floatStyles.label,
+          { top: labelTop, fontSize: labelSize, color: labelColor },
+        ]}
+      >
+        {label}
+      </Animated.Text>
+      <View style={floatStyles.inputRow}>
+        {prefix && floated ? (
+          <Text style={floatStyles.prefix}>{prefix}</Text>
+        ) : null}
+        <TextInput
+          style={floatStyles.input}
+          value={value}
+          onChangeText={onChangeText}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          keyboardType={keyboardType}
+          underlineColorAndroid="transparent"
+        />
+        {rightAccessory ? (
+          <View style={floatStyles.accessory}>{rightAccessory}</View>
+        ) : null}
+      </View>
+      {hint ? <Text style={floatStyles.hint}>{hint}</Text> : null}
+    </View>
+  );
+}
+
+const floatStyles = StyleSheet.create({
+  wrap: {
+    marginTop: Spacing.three,
+    paddingTop: 14,
+  },
+  label: {
+    position: "absolute",
+    left: 0,
+    color: Brand.textMuted,
+  },
+  inputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderBottomWidth: 1,
+    borderBottomColor: Brand.divider,
+  },
+  prefix: {
+    fontSize: 17,
+    color: Brand.navy,
+    paddingVertical: Spacing.one,
+    paddingRight: 4,
+  },
+  input: {
+    flex: 1,
+    fontSize: 17,
+    color: Brand.navy,
+    paddingVertical: Spacing.one,
+    paddingHorizontal: 0,
+    margin: 0,
+  },
+  accessory: { paddingLeft: Spacing.two },
+  hint: {
+    color: Brand.textMuted,
+    fontSize: 13,
+    marginTop: Spacing.one,
+  },
+});
 
 export default function BeneficiaryCellScreen() {
   const router = useRouter();
@@ -27,21 +144,27 @@ export default function BeneficiaryCellScreen() {
   const [save, setSave] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
+  const trimmedName = name.trim();
+  const trimmedSurname = surname.trim();
+  const fullName = [trimmedName, trimmedSurname].filter(Boolean).join(" ");
+  const initials =
+    `${trimmedName.charAt(0)}${trimmedSurname.charAt(0)}`.toUpperCase();
+
   const canNext =
-    phone.replace(/\s/g, "").length >= 9 && name.trim().length > 0;
+    phone.replace(/\s/g, "").length >= 9 && trimmedName.length > 0;
 
   async function handleNext() {
     if (!canNext || submitting) return;
+    const payload: Omit<CellBeneficiary, "id"> = {
+      type: "cell",
+      name: trimmedName,
+      surname: trimmedSurname,
+      phone: `+27 ${phone.trim()}`,
+      myRef,
+    };
     if (save && phoneNumber) {
       setSubmitting(true);
       try {
-        const payload: Omit<CellBeneficiary, "id"> = {
-          type: "cell",
-          name: name.trim(),
-          surname: surname.trim(),
-          phone: `+27 ${phone.trim()}`,
-          myRef,
-        };
         await saveBeneficiary(phoneNumber, payload);
       } catch {
         setSubmitting(false);
@@ -49,7 +172,10 @@ export default function BeneficiaryCellScreen() {
       }
       setSubmitting(false);
     }
-    router.back();
+    router.push({
+      pathname: "/payment-details",
+      params: { beneficiary: JSON.stringify({ ...payload, save }) },
+    });
   }
 
   return (
@@ -87,67 +213,61 @@ export default function BeneficiaryCellScreen() {
       >
         <View style={styles.avatarWrap}>
           <View style={styles.avatar}>
-            <SymbolView
-              name={{ ios: "person.fill", android: "person", web: "person" }}
-              size={48}
-              tintColor={Brand.white}
-            />
+            {initials ? (
+              <Text style={styles.avatarInitials}>{initials}</Text>
+            ) : (
+              <SymbolView
+                name={{ ios: "person.fill", android: "person", web: "person" }}
+                size={48}
+                tintColor={Brand.white}
+              />
+            )}
           </View>
         </View>
-        <Text style={styles.question}>Who would you like to pay?</Text>
-
-        <Text style={styles.sectionLabel}>Account details</Text>
-        <Text style={styles.fieldLabel}>Cell phone number</Text>
-        <View style={styles.phoneRow}>
-          <TextInput
-            style={styles.phoneInput}
-            value={phone ? `+27 ${phone}` : "+27 "}
-            onChangeText={(v) =>
-              setPhone(v.startsWith("+27 ") ? v.slice(4) : v)
-            }
-            keyboardType="phone-pad"
-          />
-          <SymbolView
-            name={{
-              ios: "plus.circle",
-              android: "add_circle",
-              web: "add_circle",
-            }}
-            size={28}
-            tintColor={Brand.blue}
-          />
-        </View>
-        <Text style={styles.hint}>
-          Please make sure you use the correct cellphone number, as any
-          recipient with an Instant Money wallet will have immediate access to
-          the funds.
+        <Text style={styles.question}>
+          {fullName || "Who would you like to pay?"}
         </Text>
 
-        <TextInput
-          style={styles.field}
-          placeholder="Beneficiary name"
-          placeholderTextColor={Brand.textMuted}
+        <Text style={styles.sectionLabel}>Account details</Text>
+        <FloatingLabelInput
+          label="Cell phone number"
+          value={phone}
+          onChangeText={setPhone}
+          keyboardType="phone-pad"
+          prefix="+27"
+          hint="Please make sure you use the correct cellphone number, as any recipient with an Instant Money wallet will have immediate access to the funds."
+          rightAccessory={
+            <SymbolView
+              name={{
+                ios: "plus.circle",
+                android: "add_circle",
+                web: "add_circle",
+              }}
+              size={28}
+              tintColor={Brand.blue}
+            />
+          }
+        />
+
+        <FloatingLabelInput
+          label="Beneficiary name"
           value={name}
           onChangeText={setName}
+          hint="Enter beneficiary name/s"
         />
-        <Text style={styles.fieldHint}>Enter beneficiary name/s</Text>
 
-        <TextInput
-          style={[styles.field, styles.fieldGap]}
-          placeholder="Beneficiary surname"
-          placeholderTextColor={Brand.textMuted}
+        <FloatingLabelInput
+          label="Beneficiary surname"
           value={surname}
           onChangeText={setSurname}
+          hint="Enter beneficiary surname/s"
         />
-        <Text style={styles.fieldHint}>Enter beneficiary surname/s</Text>
 
         <Text style={[styles.sectionLabel, styles.sectionGap]}>
           Other details
         </Text>
-        <TextInput
-          style={styles.field}
-          placeholder="My reference"
-          placeholderTextColor={Brand.textMuted}
+        <FloatingLabelInput
+          label="My reference"
           value={myRef}
           onChangeText={setMyRef}
         />
@@ -189,6 +309,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  avatarInitials: { color: Brand.white, fontSize: 32, fontWeight: "600" },
   question: {
     textAlign: "center",
     fontSize: 22,
@@ -203,45 +324,6 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.two,
   },
   sectionGap: { marginTop: Spacing.four },
-  fieldLabel: {
-    color: Brand.textMuted,
-    fontSize: 14,
-    marginBottom: Spacing.one,
-  },
-  phoneRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderBottomWidth: 1,
-    borderBottomColor: Brand.divider,
-    paddingBottom: Spacing.one,
-  },
-  phoneInput: {
-    flex: 1,
-    fontSize: 17,
-    color: Brand.navy,
-    paddingVertical: Spacing.one,
-  },
-  hint: {
-    color: Brand.textMuted,
-    fontSize: 13,
-    lineHeight: 18,
-    marginTop: Spacing.two,
-    marginBottom: Spacing.three,
-  },
-  field: {
-    borderBottomWidth: 1,
-    borderBottomColor: Brand.divider,
-    fontSize: 17,
-    color: Brand.navy,
-    paddingVertical: Spacing.one,
-  },
-  fieldGap: { marginTop: Spacing.three },
-  fieldHint: {
-    color: Brand.textMuted,
-    fontSize: 13,
-    marginTop: Spacing.one,
-    marginBottom: Spacing.two,
-  },
   saveRow: {
     flexDirection: "row",
     alignItems: "center",
