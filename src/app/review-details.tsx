@@ -1,23 +1,24 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { useState } from "react";
+import * as Location from "expo-location";
 import {
-  Alert,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
+    Alert,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
-  addTransaction,
-  formatRand,
-  formatVoucherNumber,
-  saveVoucher,
-  sendSms,
-  updateBalances,
+    addTransaction,
+    formatRand,
+    formatVoucherNumber,
+    saveVoucher,
+    sendSms,
+    updateBalances,
 } from "@/api";
 import { Brand, Spacing } from "@/constants/theme";
 import { useAppDispatch, useAppSelector } from "@/store";
@@ -80,6 +81,20 @@ const MONTHS_FULL = [
   "December",
 ];
 
+function buildPaymentReference(date: Date, existingReference?: string): string {
+  if (existingReference?.trim()) {
+    return existingReference.trim();
+  }
+
+  const yymmdd = `${String(date.getFullYear()).slice(-2)}${String(
+    date.getMonth() + 1,
+  ).padStart(2, "0")}${String(date.getDate()).padStart(2, "0")}`;
+  const refId = Array.from({ length: 8 }, () =>
+    Math.floor(Math.random() * 10),
+  ).join("");
+  return `${yymmdd}SBGRPP${refId}C${refId}`;
+}
+
 export function proofContactLabel(p: ProofMethod): string {
   if (p === "Email") return "Email";
   if (p === "Fax") return "Fax";
@@ -128,6 +143,9 @@ export default function ReviewDetailsScreen() {
     firstName,
     lastName,
   } = useAppSelector((s) => s.accountInfo);
+  const allowStandardBankTransfers = useAppSelector(
+    (s) => s.ui.allowStandardBankTransfers,
+  );
   const [submitting, setSubmitting] = useState(false);
 
   let payment: Payment;
@@ -154,6 +172,45 @@ export default function ReviewDetailsScreen() {
       latestBalance == null
     )
       return;
+
+    // ── Location gate ─────────────────────────────────────────────────────────
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== Location.PermissionStatus.GRANTED) {
+      Alert.alert(
+        "Location Required",
+        "Standard Bank requires your location to process transactions. Please enable Location Services and try again.",
+        [{ text: "OK" }],
+      );
+      return;
+    }
+    let latitude: number | undefined;
+    let longitude: number | undefined;
+    try {
+      const pos = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+      latitude = pos.coords.latitude;
+      longitude = pos.coords.longitude;
+    } catch {
+      Alert.alert(
+        "Location Unavailable",
+        "Could not retrieve your location. Please check your Location Services and try again.",
+      );
+      return;
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // If beneficiary is a bank and it's Standard Bank and transfers are disabled, block
+    const isStandardBank = (ben.bank ?? "")
+      .toLowerCase()
+      .includes("standard bank");
+    if (!isCell && isStandardBank && !allowStandardBankTransfers) {
+      Alert.alert(
+        "Transaction could not be processed",
+        "Transaction could not be processed, please go to your nearest branch.",
+      );
+      return;
+    }
     setSubmitting(true);
     const newAvailable = availableBalance - payment.amount;
     const newLatest = latestBalance - payment.amount;
@@ -167,6 +224,8 @@ export default function ReviewDetailsScreen() {
           "",
         )
       : "";
+    const transactionReference = buildPaymentReference(d, payment.myRef);
+    const paymentWithReference = { ...payment, myRef: transactionReference };
     try {
       await addTransaction(phoneNumber, {
         date,
@@ -177,9 +236,11 @@ export default function ReviewDetailsScreen() {
         amount: `-${payment.amount.toFixed(2)}`,
         beneficiaryName: displayName,
         account: displaySub,
-        myRef: payment.myRef ?? "",
+        myRef: transactionReference,
         theirRef: payment.theirRef ?? "",
         runningBalance: formatRand(newLatest),
+        latitude,
+        longitude,
       });
       if (isCell) {
         await saveVoucher(phoneNumber, {
@@ -187,7 +248,7 @@ export default function ReviewDetailsScreen() {
           amount: payment.amount,
           voucherNumber,
           pin: payment.pin ?? "",
-          myRef: payment.myRef ?? "",
+          myRef: transactionReference,
           beneficiaryName: displayName,
           date: voucherDate,
         });
@@ -201,11 +262,7 @@ export default function ReviewDetailsScreen() {
         const acctTail = (ben.accountNumber ?? "").slice(-4);
         const isoDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
         const smsTime = `${String(d.getHours()).padStart(2, "0")}h${String(d.getMinutes()).padStart(2, "0")}`;
-        const yymmdd = `${String(d.getFullYear()).slice(-2)}${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
-        const refId = Array.from({ length: 8 }, () =>
-          Math.floor(Math.random() * 10),
-        ).join("");
-        const ref = `${yymmdd}SBGRPP${refId}C${refId}`;
+        const ref = buildPaymentReference(d, payment.myRef);
         const smsBody = `Standard Bank - Payment from ${senderName} to Account: **${acctTail}. Amount R${payment.amount.toFixed(2)} on ${isoDate} at ${smsTime}. Ref ${ref}. Please check your account.`;
         sendSms(payment.proofContact, smsBody).catch(() => {});
       }
@@ -219,7 +276,7 @@ export default function ReviewDetailsScreen() {
       router.replace({
         pathname: "/confirmation",
         params: {
-          payment: JSON.stringify(payment),
+          payment: JSON.stringify(paymentWithReference),
           newAvailable: String(newAvailable),
           voucherNumber,
         },

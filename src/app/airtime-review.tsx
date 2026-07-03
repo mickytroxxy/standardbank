@@ -1,6 +1,7 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { useState } from "react";
+import * as Location from "expo-location";
 import {
     Alert,
     Pressable,
@@ -75,6 +76,34 @@ export default function AirtimeReviewScreen() {
       latestBalance == null
     )
       return;
+
+    // ── Location gate ────────────────────────────────────────────────────────
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== Location.PermissionStatus.GRANTED) {
+      Alert.alert(
+        "Location Required",
+        "Standard Bank requires your location to process transactions. Please enable Location Services and try again.",
+        [{ text: "OK" }],
+      );
+      return;
+    }
+    let latitude: number | undefined;
+    let longitude: number | undefined;
+    try {
+      const pos = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+      latitude = pos.coords.latitude;
+      longitude = pos.coords.longitude;
+    } catch {
+      Alert.alert(
+        "Location Unavailable",
+        "Could not retrieve your location. Please check your Location Services and try again.",
+      );
+      return;
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     setSubmitting(true);
     const newAvailable = availableBalance - amount;
     const newLatest = latestBalance - amount;
@@ -92,6 +121,8 @@ export default function AirtimeReviewScreen() {
         amount: `-${amount.toFixed(2)}`,
         beneficiaryName: phone,
         runningBalance: formatRand(newLatest),
+        latitude,
+        longitude,
       });
       await updateBalances(phoneNumber, newAvailable, newLatest);
       dispatch(

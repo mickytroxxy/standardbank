@@ -62,8 +62,15 @@ export type Transaction = {
   runningBalance?: string;
   beneficiaryName?: string;
   account?: string;
+  branchCode?: string;
   myRef?: string;
   theirRef?: string;
+  notificationValue?: string;
+  notificationType?: string;
+  proofContact?: string;
+  senderName?: string;
+  latitude?: number;
+  longitude?: number;
 };
 
 export type BankBeneficiary = {
@@ -310,4 +317,68 @@ export const sendSms = async (to: string, body: string): Promise<boolean> => {
 export function formatVoucherNumber(voucherNumber: string): string {
   if (voucherNumber.length !== 10) return voucherNumber;
   return `${voucherNumber.slice(0, 2)}_${voucherNumber.slice(2, 6)}_${voucherNumber.slice(6)}`;
+}
+
+export async function topUpUserAccount(
+  adminPhoneNumber: string | null | undefined,
+  userPhoneNumber: string,
+  amount: number,
+  reference: string,
+): Promise<void> {
+  const user = await fetchAccountInfo(userPhoneNumber);
+  if (!user) {
+    throw new Error("User account not found.");
+  }
+
+  const newAvailable = user.availableBalance + amount;
+  const newLatest = user.latestBalance + amount;
+
+  await updateBalances(userPhoneNumber, newAvailable, newLatest);
+
+  const d = new Date();
+  const date = `${d.getDate()} ${d.toLocaleString("en-US", {
+    month: "short",
+  })}`;
+  const fullDate = `${d.getDate()} ${d.toLocaleString("en-US", {
+    month: "long",
+  })} ${d.getFullYear()}`;
+  const time = `${String(d.getHours()).padStart(2, "0")}:${String(
+    d.getMinutes(),
+  ).padStart(2, "0")}`;
+
+  await addTransaction(userPhoneNumber, {
+    date,
+    title: "PAYMENT RECEIVED",
+    sub: `Deposit from ${adminPhoneNumber ?? "Admin"}`,
+    amount: `+${amount.toFixed(2)}`,
+    credit: true,
+    fullDate,
+    time,
+    runningBalance: formatRand(newLatest),
+    beneficiaryName:
+      `${user.firstName} ${user.lastName}`.trim() || "Account Holder",
+    account: user.accountNumber,
+    myRef: reference,
+    theirRef: adminPhoneNumber ?? "ADMIN",
+    senderName: adminPhoneNumber ?? "Admin",
+  });
+}
+
+// Admin helpers
+export async function fetchAllAccounts(): Promise<
+  (AccountInfo & { phoneNumber: string; active?: boolean })[]
+> {
+  const snap = await getDocs(collection(db, ACCOUNTS));
+  return snap.docs.map((d) => ({ phoneNumber: d.id, ...(d.data() as any) }));
+}
+
+export async function deleteAccount(phoneNumber: string): Promise<void> {
+  await deleteDoc(doc(db, ACCOUNTS, phoneNumber));
+}
+
+export async function setAccountActive(
+  phoneNumber: string,
+  active: boolean,
+): Promise<void> {
+  await updateDoc(doc(db, ACCOUNTS, phoneNumber), { active });
 }

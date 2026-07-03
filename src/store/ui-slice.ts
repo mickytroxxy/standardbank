@@ -3,11 +3,15 @@ import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 export type UiState = {
   proofSent: boolean;
   selectedBank: string | null;
+  allowImmediatePayment: boolean;
+  allowStandardBankTransfers: boolean;
 };
 
 const initialState: UiState = {
   proofSent: false,
   selectedBank: null,
+  allowImmediatePayment: true,
+  allowStandardBankTransfers: true,
 };
 
 const uiSlice = createSlice({
@@ -23,6 +27,12 @@ const uiSlice = createSlice({
     setSelectedBank(state, action: PayloadAction<string>) {
       state.selectedBank = action.payload;
     },
+    setAllowImmediatePayment(state, action: PayloadAction<boolean>) {
+      state.allowImmediatePayment = action.payload;
+    },
+    setAllowStandardBankTransfers(state, action: PayloadAction<boolean>) {
+      state.allowStandardBankTransfers = action.payload;
+    },
     clearSelectedBank(state) {
       state.selectedBank = null;
     },
@@ -34,6 +44,8 @@ export const {
   clearProofSent,
   setSelectedBank,
   clearSelectedBank,
+  setAllowImmediatePayment,
+  setAllowStandardBankTransfers,
 } = uiSlice.actions;
 
 export default uiSlice.reducer;

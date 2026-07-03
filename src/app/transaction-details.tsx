@@ -1,4 +1,6 @@
 import Ionicons from "@react-native-vector-icons/ionicons";
+import axios from "axios";
+import { Asset } from "expo-asset";
 import * as Print from "expo-print";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Sharing from "expo-sharing";
@@ -7,10 +9,13 @@ import { useEffect, useState } from "react";
 import {
   Alert,
   Linking,
+  Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -18,9 +23,11 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { Transaction } from "@/api";
 import { Brand, Spacing } from "@/constants/theme";
 import { useAppDispatch, useAppSelector } from "@/store";
-import { clearProofSent } from "@/store/ui-slice";
+import { clearProofSent, setProofSent } from "@/store/ui-slice";
 
 const SUPPORT_NUMBER = "0860 123 000";
+const SEND_POP_ENDPOINT =
+  "https://mrdocs-server-621707723909.europe-west1.run.app/api/send-standard-bank-pop";
 
 function escapeHtml(s: string): string {
   return s
@@ -31,6 +38,55 @@ function escapeHtml(s: string): string {
     .replace(/'/g, "&#39;");
 }
 
+function maskAccountNumber(account: string): string {
+  if (!account || account === "—") return account;
+  const tail = account.slice(-4);
+  if (!/\d{4}$/.test(tail)) return account;
+  return `${"X".repeat(Math.max(0, account.length - 4))}${tail}`;
+}
+
+function formatPaymentTime(time: string): string {
+  if (time.match(/^\d{2}:\d{2}$/)) {
+    return time.replace(":", "h");
+  }
+  return time;
+}
+
+function formatPaymentDate(date: string): string {
+  if (date.match(/^\d{4}-\d{2}-\d{2}$/)) {
+    return date;
+  }
+  return date;
+}
+
+async function fetchLocalFileAsBlob(uri: string): Promise<Blob> {
+  const response = await fetch(uri);
+  if (!response.ok) {
+    throw new Error(`Unable to read PDF file for upload: ${response.status}`);
+  }
+  if (typeof response.blob !== "function") {
+    throw new Error("Browser does not support response.blob().");
+  }
+  const blob = await response.blob();
+  if (!(blob instanceof Blob)) {
+    throw new Error("Failed to create Blob from PDF URI.");
+  }
+  return blob;
+}
+
+async function appendFileToFormData(formData: FormData, uri: string) {
+  if (Platform.OS === "web") {
+    const fileBlob = await fetchLocalFileAsBlob(uri);
+    formData.append("file", fileBlob, "proof-of-payment.pdf");
+  } else {
+    formData.append("file", {
+      uri,
+      name: "PaymentConfirmation.pdf",
+      type: "application/pdf",
+    } as any);
+  }
+}
+
 function buildProofOfPaymentHtml(args: {
   tx: Transaction;
   amountText: string;
@@ -38,12 +94,28 @@ function buildProofOfPaymentHtml(args: {
   accountNumber: string;
   generatedAt: string;
   reference: string;
+  logoUri: string;
+  isImmediate: boolean;
 }): string {
-  const { tx, amountText, holderName, accountNumber, generatedAt, reference } =
-    args;
+  const {
+    tx,
+    amountText,
+    holderName,
+    accountNumber,
+    generatedAt,
+    reference,
+    logoUri,
+    isImmediate,
+  } = args;
   const e = escapeHtml;
+  const paymentDate = formatPaymentDate(tx.date ?? tx.fullDate ?? "—");
+  const paymentTime = formatPaymentTime(tx.time ?? "");
+  const paymentDateTime = paymentTime
+    ? `${paymentDate} ${paymentTime}`
+    : paymentDate;
   const row = (label: string, value: string) =>
     `<div class="row"><div class="row-label">${e(label)}</div><div class="row-value">${e(value)}</div></div>`;
+
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -52,66 +124,90 @@ function buildProofOfPaymentHtml(args: {
 <style>
   @page { margin: 0; size: A4; }
   * { box-sizing: border-box; }
-  body { font-family: Helvetica, Arial, sans-serif; color: #0A1F44; margin: 0; }
-  .header { background: #003ccd; color: #fff; padding: 28px 40px; }
-  .brand { font-size: 22px; font-weight: bold; letter-spacing: 1px; }
-  .title { font-size: 16px; margin-top: 4px; opacity: 0.9; }
-  .container { padding: 28px 40px 40px; }
-  .meta { display: flex; justify-content: space-between; color: #6B7280; font-size: 11px; margin-bottom: 8px; }
-  .section-label { color: #003ccd; font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.8px; margin: 20px 0 8px; }
-  .card { border: 1px solid #E2E5EA; border-radius: 6px; padding: 14px 18px; }
-  .name { font-size: 15px; font-weight: bold; }
-  .num { color: #6B7280; font-size: 12px; margin-top: 2px; }
-  .amount-strip { background: #003ccd; color: #fff; text-align: center; padding: 14px; border-radius: 6px; margin: 16px 0 4px; font-size: 22px; font-weight: bold; letter-spacing: 0.5px; }
-  .row { display: flex; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid #E2E5EA; font-size: 12px; }
-  .row:last-child { border-bottom: none; }
-  .row-label { color: #6B7280; }
-  .row-value { color: #0A1F44; font-weight: 600; text-align: right; max-width: 60%; }
-  .status { text-align: center; color: #1F9D55; font-weight: bold; margin: 22px 0 6px; font-size: 13px; }
-  .footer { border-top: 1px solid #E2E5EA; margin-top: 28px; padding-top: 14px; font-size: 10px; color: #6B7280; line-height: 1.6; }
-  .footer-brand { font-weight: bold; color: #003ccd; margin-top: 8px; font-size: 11px; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #1d2533; margin: 0; background: #fff; }
+  .page { padding: 40px 48px 36px; position: relative; min-height: 100vh; }
+  .top-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 36px; }
+  .brand-block { display: flex; align-items: center; gap: 12px; }
+  .logo-img { width: 80px; height: auto; }
+  .brand-name { font-size: 28px; font-weight: 700; color: #003ccd; margin: 0; }
+  .address { text-align: right; font-size: 11px; line-height: 1.5; color: #333; max-width: 320px; }
+  .content { padding-top: 8px; padding-bottom: 140px; }
+  h1 { font-size: 20px; margin: 0 0 18px; color: #1d2533; }
+  p { margin: 0 0 16px; line-height: 1.6; font-size: 13px; color: #303640; }
+  .field-list { margin: 14px 0 0; padding: 0; }
+  .row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; }
+  .row-label { color: #000; width: 45%; font-weight: 700; }
+  .row-value { color: #1d2533; font-weight: 400; text-align: right; width: 50%; }
+  .group { margin-top: 24px; }
+  .group strong { font-weight: 700; }
+  .signature { margin-top: 30px; }
+  .signature p { margin-bottom: 2px; }
+  .footer { position: fixed; bottom: 0; left: 48px; right: 48px; padding-top: 14px; border-top: 1px solid #dfe3e8; font-size: 10px; color: #6b7280; line-height: 1.5; margin: 0; background: #fff; }
 </style>
 </head>
 <body>
-  <div class="header">
-    <div class="brand">Standard Bank</div>
-    <div class="title">Proof of payment</div>
-  </div>
-  <div class="container">
-    <div class="meta">
-      <div>Generated: ${e(generatedAt)}</div>
-      <div>Reference: ${e(reference)}</div>
+  <div class="page">
+    <div class="top-row">
+      <div class="brand-block">
+        <img class="logo-img" src="${e(logoUri)}" alt="Standard Bank logo" />
+        <div>
+          <p class="brand-name">Standard Bank</p>
+        </div>
+      </div>
+      <div class="address">
+        <div>Internet Banking</div>
+        <div>Standard Bank Centre</div>
+        <div>5 Simmonds Street, Johannesburg, 2001</div>
+        <div>P.O. Box 7725, Johannesburg, 2000</div>
+        <div>Telephone: 0860 123 000</div>
+        <div>International: +27 11 299 4701</div>
+        <div>Fax: +27 11 631 8550</div>
+        <div>Website: www.standardbank.co.za</div>
+      </div>
     </div>
 
-    <div class="section-label">From</div>
-    <div class="card">
-      <div class="name">${e(holderName)}</div>
-      <div class="num">MYMOACC &middot; ${e(accountNumber)}</div>
+    <div class="content">
+      <p>Dear ${e(tx.beneficiaryName ?? tx.title ?? "Customer")},</p>
+      <p>${isImmediate ? "Immediate Payment Confirmation" : "Payment Confirmation"}</p>
+
+      <div class="field-list">
+        ${row("Reference number", tx.myRef?.trim() ? tx.myRef : reference)}
+        ${row("Beneficiary name", tx.beneficiaryName ?? tx.title ?? "—")}
+        ${row("Bank name", tx.sub ?? "—")}
+        ${row("Beneficiary account number", maskAccountNumber(tx.account ?? "—"))}
+        ${row("Beneficiary branch number", tx.branchCode ?? "—")}
+        ${row("Beneficiary reference", tx.theirRef ?? tx.title ?? "—")}
+        ${row("Amount", amountText)}
+        ${row("Payment date and time", paymentDateTime || "—")}
+      </div>
+
+      <div class="group">
+        <p>If you need more information or have any questions about this payment, please contact:</p>
+        <p><strong>${e(holderName)}</strong></p>
+      </div>
+
+      <div class="group">
+        <p>Immediate payments may take a few hours.</p>
+        <p>Non-immediate payments to Standard Bank accounts may take up to 24 hours.</p>
+        <p>Non-immediate payments to other banks may take up to three business days.</p>
+      </div>
+
+      <div class="group">
+        <p>Please check your account to confirm you have received this payment.</p>
+      </div>
+
+      <div class="signature">
+        <p>Yours sincerely,</p>
+        <p>The Internet Banking Team</p>
+      </div>
     </div>
-
-    <div class="amount-strip">${e(amountText)}</div>
-
-    <div class="section-label">To</div>
-    <div class="card">
-      <div class="name">${e(tx.beneficiaryName ?? tx.title ?? "—")}</div>
-      <div class="num">${e(tx.account ?? "—")}</div>
-    </div>
-
-    <div class="section-label">Transaction details</div>
-    <div class="card">
-      ${row("Transaction date", tx.fullDate ?? tx.date ?? "—")}
-      ${tx.time ? row("Time", tx.time) : ""}
-      ${row("My reference", tx.myRef ?? "—")}
-      ${tx.theirRef ? row("Their reference", tx.theirRef) : ""}
-      ${row("Running balance", tx.runningBalance ?? "—")}
-    </div>
-
-    <div class="status">&#10003; This payment was successfully processed</div>
 
     <div class="footer">
-      For queries please call ${e(SUPPORT_NUMBER)}.<br/>
-      This document was generated electronically and does not require a signature.
-      <div class="footer-brand">Standard Bank &mdash; Moving Forward&trade;</div>
+      The Standard Bank of South Africa Limited (Reg. No. 1962/000738/06) Authorised financial services provider and registered credit provider (NCRCP15).
+      <br />
+      Directors: N Nyembezi (Chairman) DWP Hodnett* (Chief Executive Officer) LL Bam HJ Berrange PLH Cook A Daehnke* OA David-Borah* GJ Fraser-Moleketi GMB Keneally BJ Kruger Li Li2 JH Maree NNA Matyumza RN Ogega5 Fenglil TanZ SK Tshabalala*.
+      <br />
+      Company Secretary: K Kroneman - 2025/10/10.
     </div>
   </div>
 </body>
@@ -127,6 +223,9 @@ export default function TransactionDetailsScreen() {
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [toastVisible, setToastVisible] = useState(false);
+  const [emailModalVisible, setEmailModalVisible] = useState(false);
+  const [emailInput, setEmailInput] = useState("");
+  const [sendingProof, setSendingProof] = useState(false);
 
   useEffect(() => {
     if (!proofSent) return;
@@ -147,7 +246,7 @@ export default function TransactionDetailsScreen() {
   const isCredit = !!tx.credit;
   const sign = isCredit ? "" : amountNum < 0 ? "-" : "";
   const absAmount = Math.abs(amountNum).toFixed(2);
-  const amountText = `${sign}R ${absAmount}`;
+  const amountText = `${sign}R${absAmount}`;
   const hasProofOfPayment = !isCredit && !!tx.beneficiaryName;
 
   const holder = useAppSelector((s) => s.accountInfo);
@@ -156,35 +255,56 @@ export default function TransactionDetailsScreen() {
     .join(" ")
     .trim();
   const holderAccount = holder.accountNumber ?? "";
+  const isImmediate = tx.sub?.toUpperCase() === "IMMEDIATE PAYMENT";
+
+  const createProofPdfUri = async () => {
+    if (typeof Print?.printToFileAsync !== "function") {
+      throw new Error(
+        "Rebuild the dev client (npx expo run:ios / run:android) so expo-print is linked.",
+      );
+    }
+
+    const now = new Date();
+    const generatedAt = now.toLocaleString("en-ZA", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    const reference = tx.myRef?.trim()
+      ? tx.myRef.trim()
+      : (() => {
+          const yy = String(now.getFullYear()).slice(-2);
+          const mm = String(now.getMonth() + 1).padStart(2, "0");
+          const dd = String(now.getDate()).padStart(2, "0");
+          const refId = Array.from({ length: 8 }, () =>
+            Math.floor(Math.random() * 10),
+          ).join("");
+          return `${yy}${mm}${dd}SBGRPP${refId}C${refId}`;
+        })();
+    const logoAsset = Asset.fromModule(
+      require("../../assets/images/logo.png") as number,
+    );
+    await logoAsset.downloadAsync();
+    const html = buildProofOfPaymentHtml({
+      tx,
+      amountText,
+      holderName: holderName || "Account holder",
+      accountNumber: holderAccount,
+      generatedAt,
+      reference,
+      logoUri: logoAsset.uri,
+      isImmediate,
+    });
+    const { uri } = await Print.printToFileAsync({ html });
+    return { uri, reference };
+  };
 
   const handleDownload = async () => {
     setMenuOpen(false);
-    if (typeof Print?.printToFileAsync !== "function") {
-      Alert.alert(
-        "PDF unavailable",
-        "Rebuild the dev client (npx expo run:ios / run:android) so expo-print is linked.",
-      );
-      return;
-    }
     try {
-      const now = new Date();
-      const generatedAt = now.toLocaleString("en-ZA", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-      const reference = tx.myRef ?? `POP${now.getTime().toString().slice(-10)}`;
-      const html = buildProofOfPaymentHtml({
-        tx,
-        amountText,
-        holderName: holderName || "Account holder",
-        accountNumber: holderAccount,
-        generatedAt,
-        reference,
-      });
-      const { uri } = await Print.printToFileAsync({ html });
+      const { uri } = await createProofPdfUri();
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(uri, {
           mimeType: "application/pdf",
@@ -197,6 +317,62 @@ export default function TransactionDetailsScreen() {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       Alert.alert("Download failed", message);
+    }
+  };
+
+  const handleSend = async (email: string) => {
+    const normalizedEmail = email.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      Alert.alert("Invalid email", "Please enter a valid email address.");
+      return;
+    }
+
+    setSendingProof(true);
+    try {
+      const { uri, reference } = await createProofPdfUri();
+      const amountValue = `${Math.abs(amountNum).toFixed(2)}`;
+      const paymentDate = `${new Date(
+        tx.fullDate ?? tx.date ?? new Date(),
+      ).getTime()}`;
+
+      const formData = new FormData();
+      await appendFileToFormData(formData, uri);
+      formData.append("notificationValue", normalizedEmail);
+      formData.append("senderName", holderName || "Account holder");
+      formData.append("amount", amountValue);
+      formData.append("accountNumber", tx.account ?? holderAccount ?? "");
+      formData.append("paymentReference", reference);
+      formData.append("date", paymentDate);
+      formData.append("bankName", "");
+      formData.append("isImmediate", isImmediate ? "true" : "false");
+      formData.append("notificationType", "email");
+
+      const response = await axios.post(SEND_POP_ENDPOINT, formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+        transformRequest: (data, headers) => {
+          delete headers?.["Content-Type"];
+          return data;
+        },
+      });
+
+      if (response.status !== 200 && response.status !== 201) {
+        throw new Error(
+          response.data?.message || "The proof could not be sent.",
+        );
+      }
+
+      setEmailModalVisible(false);
+      setEmailInput("");
+      setMenuOpen(false);
+      dispatch(setProofSent());
+      Alert.alert("Sent", "Proof of payment sent successfully.");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      Alert.alert("Send failed", message);
+    } finally {
+      setSendingProof(false);
     }
   };
 
@@ -246,7 +422,9 @@ export default function TransactionDetailsScreen() {
             </View>
             <View style={styles.row}>
               <Text style={styles.rowLabel}>Transaction date</Text>
-              <Text style={styles.rowValue}>{tx.fullDate ?? tx.date}</Text>
+              <Text style={styles.rowValue}>
+                {formatPaymentDate(tx.date ?? tx.fullDate ?? "—")}
+              </Text>
             </View>
             <View style={styles.divider} />
             <Text style={styles.queryLine}>
@@ -288,11 +466,8 @@ export default function TransactionDetailsScreen() {
                   <Pressable
                     style={styles.menuItem}
                     onPress={() => {
-                      setMenuOpen(false);
-                      router.push({
-                        pathname: "/send-proof-of-payment",
-                        params: { tx: JSON.stringify(tx) },
-                      });
+                      setEmailInput("");
+                      setEmailModalVisible(true);
                     }}
                   >
                     <Text style={styles.menuText}>Send</Text>
@@ -306,6 +481,49 @@ export default function TransactionDetailsScreen() {
           )}
         </ScrollView>
       </Pressable>
+
+      <Modal
+        transparent
+        animationType="fade"
+        visible={emailModalVisible}
+        onRequestClose={() => setEmailModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Send proof of payment</Text>
+            <Text style={styles.modalText}>
+              Enter the recipient email address
+            </Text>
+            <TextInput
+              value={emailInput}
+              onChangeText={setEmailInput}
+              placeholder="name@example.com"
+              placeholderTextColor={Brand.textMuted}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+              style={styles.modalInput}
+            />
+            <View style={styles.modalActions}>
+              <Pressable
+                style={styles.modalCancelBtn}
+                onPress={() => setEmailModalVisible(false)}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modalSendBtn, sendingProof && { opacity: 0.7 }]}
+                disabled={sendingProof}
+                onPress={() => handleSend(emailInput)}
+              >
+                <Text style={styles.modalSendText}>
+                  {sendingProof ? "Sending..." : "Send"}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {toastVisible && (
         <View style={[styles.toast, { bottom: insets.bottom + Spacing.three }]}>
@@ -422,4 +640,61 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.three + 2,
   },
   toastText: { color: Brand.white, fontSize: 15 },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.45)",
+    justifyContent: "center",
+    padding: Spacing.three,
+  },
+  modalCard: {
+    backgroundColor: Brand.white,
+    borderRadius: 10,
+    padding: Spacing.three,
+  },
+  modalTitle: {
+    color: Brand.textDark,
+    fontSize: 18,
+    fontWeight: "700",
+    marginBottom: Spacing.one,
+  },
+  modalText: {
+    color: Brand.textMuted,
+    fontSize: 14,
+    marginBottom: Spacing.three,
+  },
+  modalInput: {
+    borderWidth: 1,
+    borderColor: Brand.divider,
+    borderRadius: 6,
+    paddingHorizontal: Spacing.two,
+    paddingVertical: Spacing.two,
+    color: Brand.textDark,
+    fontSize: 15,
+  },
+  modalActions: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: Spacing.two,
+    marginTop: Spacing.three,
+  },
+  modalCancelBtn: {
+    paddingHorizontal: Spacing.two,
+    paddingVertical: Spacing.two,
+  },
+  modalCancelText: {
+    color: Brand.blue,
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  modalSendBtn: {
+    backgroundColor: Brand.blue,
+    borderRadius: 6,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+  },
+  modalSendText: {
+    color: Brand.white,
+    fontSize: 15,
+    fontWeight: "600",
+  },
 });

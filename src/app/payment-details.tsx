@@ -2,15 +2,15 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { useRef, useState } from "react";
 import {
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  TextInput,
-  View,
+    KeyboardAvoidingView,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Switch,
+    Text,
+    TextInput,
+    View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -62,7 +62,22 @@ export default function PaymentDetailsScreen() {
   const [amount, setAmount] = useState("0.00");
   const [amountTouched, setAmountTouched] = useState(false);
   const [immediate, setImmediate] = useState(false);
-  const [myRef, setMyRef] = useState(ben.myRef ?? "");
+  const allowImmediatePayment = useAppSelector(
+    (s) => s.ui.allowImmediatePayment,
+  );
+  const [myRef, setMyRef] = useState(() => {
+    if (ben.myRef?.trim()) {
+      return ben.myRef.trim();
+    }
+    const date = new Date();
+    const yymmdd = `${String(date.getFullYear()).slice(-2)}${String(
+      date.getMonth() + 1,
+    ).padStart(2, "0")}${String(date.getDate()).padStart(2, "0")}`;
+    const refId = Array.from({ length: 8 }, () =>
+      Math.floor(Math.random() * 10),
+    ).join("");
+    return `${yymmdd}SBGRPP${refId}C${refId}`;
+  });
   const [theirRef, setTheirRef] = useState(ben.theirRef ?? "");
   const [proof, setProof] = useState<ProofMethod>(ben.proof ?? "SMS");
   const [proofOpen, setProofOpen] = useState(false);
@@ -304,24 +319,26 @@ export default function PaymentDetailsScreen() {
               </>
             ) : (
               <>
-                <View style={styles.toggleRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.toggleTitle}>Immediate payment</Text>
-                    <Text style={styles.toggleSub}>
-                      You&apos;ll be charged a fee based on the payment amount
-                    </Text>
+                {allowImmediatePayment && (
+                  <View style={styles.toggleRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.toggleTitle}>Immediate payment</Text>
+                      <Text style={styles.toggleSub}>
+                        You&apos;ll be charged a fee based on the payment amount
+                      </Text>
+                    </View>
+                    <View style={styles.infoDot}>
+                      <Text style={styles.infoDotText}>i</Text>
+                    </View>
+                    <Switch
+                      value={immediate}
+                      onValueChange={setImmediate}
+                      trackColor={{ false: Brand.divider, true: Brand.blue }}
+                      thumbColor={Brand.white}
+                      style={{ marginLeft: Spacing.two }}
+                    />
                   </View>
-                  <View style={styles.infoDot}>
-                    <Text style={styles.infoDotText}>i</Text>
-                  </View>
-                  <Switch
-                    value={immediate}
-                    onValueChange={setImmediate}
-                    trackColor={{ false: Brand.divider, true: Brand.blue }}
-                    thumbColor={Brand.white}
-                    style={{ marginLeft: Spacing.two }}
-                  />
-                </View>
+                )}
 
                 <Text style={styles.fieldLabel}>My reference</Text>
                 <TextInput

@@ -1,7 +1,14 @@
 import { useFocusEffect, useRouter, type Href } from "expo-router";
 import { SymbolView, type AndroidSymbol, type SFSymbol } from "expo-symbols";
 import { useCallback, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { fetchBeneficiaries, type SavedBeneficiary } from "@/api";
@@ -94,11 +101,13 @@ export default function PayScreen() {
             size={24}
             tintColor={Brand.white}
           />
-          <SymbolView
-            name={{ ios: "plus", android: "add", web: "add" }}
-            size={24}
-            tintColor={Brand.white}
-          />
+          <TouchableOpacity onPress={() => router.push("/beneficiary-account")}>
+            <SymbolView
+              name={{ ios: "plus", android: "add", web: "add" }}
+              size={24}
+              tintColor={Brand.white}
+            />
+          </TouchableOpacity>
           <SymbolView
             name={{ ios: "ellipsis", android: "more_vert", web: "more_vert" }}
             size={24}
@@ -152,7 +161,10 @@ export default function PayScreen() {
           />
         </View>
 
-        <Pressable style={styles.addBen}>
+        <Pressable
+          style={styles.addBen}
+          onPress={() => router.push("/beneficiary-account")}
+        >
           <SymbolView
             name={{
               ios: "plus.circle",

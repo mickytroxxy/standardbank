@@ -1,9 +1,16 @@
+import axios from "axios";
 import { MaterialDesignIcons } from "@react-native-vector-icons/material-design-icons";
+import { Asset } from "expo-asset";
+import * as Print from "expo-print";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
-import { useState } from "react";
+import * as Sharing from "expo-sharing";
+import { useEffect, useState } from "react";
 import {
+    Alert,
     KeyboardAvoidingView,
+    Linking,
+    Modal,
     Platform,
     Pressable,
     ScrollView,
@@ -14,19 +21,26 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { sendSms } from "@/api";
 import type { Transaction } from "@/api";
 import { Brand, Spacing } from "@/constants/theme";
-import { useAppDispatch } from "@/store";
+import { useAppDispatch, useAppSelector } from "@/store";
 import { setProofSent } from "@/store/ui-slice";
 
 type Method = "Email" | "SMS";
 const METHODS: Method[] = ["Email", "SMS"];
+
+const SEND_POP_ENDPOINT =
+  "http://192.168.0.117:1337/api/send-standard-bank-pop";
+
+const SUPPORT_NUMBER = "0860 123 000";
 
 export default function SendProofOfPaymentScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const dispatch = useAppDispatch();
   const params = useLocalSearchParams<{ tx?: string }>();
+  const holder = useAppSelector((s) => s.accountInfo);
 
   let tx: Transaction;
   try {
@@ -39,20 +53,117 @@ export default function SendProofOfPaymentScreen() {
   const [methodOpen, setMethodOpen] = useState(false);
   const [email, setEmail] = useState("");
   const [smsNumber, setSmsNumber] = useState("");
+  const [sending, setSending] = useState(false);
 
   const amountNum = parseFloat(tx.amount ?? "0");
   const absAmount = Math.abs(amountNum).toFixed(2);
   const amountText = `-R ${absAmount}`;
+
+  const holderName = [holder.title, holder.firstName, holder.lastName]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+  const holderAccount = holder.accountNumber ?? "";
+  const isImmediate = tx.sub?.toUpperCase() === "IMMEDIATE PAYMENT";
 
   const canSend =
     method === "Email"
       ? /.+@.+\..+/.test(email.trim())
       : smsNumber.replace(/[^0-9]/g, "").length >= 10;
 
-  function handleSend() {
+  const createProofPdfUri = async () => {
+    const now = new Date();
+    const generatedAt = now.toLocaleString("en-ZA", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    const reference = tx.myRef?.trim()
+      ? tx.myRef.trim()
+      : `POP${now.getTime().toString().slice(-10)}`;
+    const logoAsset = Asset.fromModule(
+      require("../../assets/images/logo.png") as number,
+    );
+    await logoAsset.downloadAsync();
+    const html = buildProofOfPaymentHtml({
+      tx,
+      amountText,
+      holderName: holderName || "Account holder",
+      accountNumber: holderAccount,
+      generatedAt,
+      reference,
+      logoUri: logoAsset.uri,
+      isImmediate,
+    });
+    const { uri } = await Print.printToFileAsync({ html });
+    return { uri, reference };
+  };
+
+  async function appendFileToFormData(formData: FormData, uri: string) {
+    if (Platform.OS === "web") {
+      const response = await fetch(uri);
+      const fileBlob = await response.blob();
+      formData.append("file", fileBlob, "proof-of-payment.pdf");
+    } else {
+      formData.append("file", {
+        uri,
+        name: "proof-of-payment.pdf",
+        type: "application/pdf",
+      } as any);
+    }
+  }
+
+  async function handleSend() {
     if (!canSend) return;
-    dispatch(setProofSent());
-    router.back();
+    setSending(true);
+
+    try {
+      const { uri, reference } = await createProofPdfUri();
+      const paymentDate = `${new Date(
+        tx.fullDate ?? tx.date ?? new Date(),
+      ).getTime()}`;
+
+      const formData = new FormData();
+      await appendFileToFormData(formData, uri);
+      formData.append("notificationValue", method === "Email" ? email.trim() : smsNumber);
+      formData.append("senderName", holderName || "Account holder");
+      formData.append("amount", absAmount);
+      formData.append("accountNumber", tx.account ?? holderAccount ?? "");
+      formData.append("paymentReference", reference);
+      formData.append("date", paymentDate);
+      formData.append("bankName", "");
+      formData.append("isImmediate", isImmediate ? "true" : "false");
+      formData.append("notificationType", method.toLowerCase());
+
+      if (method === "Email") {
+        const response = await axios.post(SEND_POP_ENDPOINT, formData, {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+          transformRequest: (data, headers) => {
+            delete headers?.["Content-Type"];
+            return data;
+          },
+        });
+
+        if (response.status !== 200 && response.status !== 201) {
+          throw new Error(response.data?.message || "Failed to send email.");
+        }
+      } else {
+        const success = await sendSms(smsNumber, `Payment of ${amountText} sent to ${tx.beneficiaryName ?? tx.title}. Ref: ${reference}`);
+        if (!success) throw new Error("Failed to send SMS.");
+      }
+
+      dispatch(setProofSent());
+      router.back();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      Alert.alert("Send failed", message);
+    } finally {
+      setSending(false);
+    }
   }
 
   return (

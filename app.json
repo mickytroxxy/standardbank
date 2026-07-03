@@ -1,10 +1,10 @@
 {
   "expo": {
-    "name": "standard/Stanic",
+    "name": "Standard/Stanic",
     "slug": "standardbank",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/logo.png",
+    "icon": "./assets/images/icon.png",
     "scheme": "standardbank",
     "userInterfaceStyle": "automatic",
     "ios": {
@@ -13,16 +13,16 @@
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/logo.png",
-        "backgroundImage": "./assets/images/logo.png",
-        "monochromeImage": "./assets/images/logo.png"
+        "foregroundImage": "./assets/images/icon.png",
+        "backgroundImage": "./assets/images/icon.png",
+        "monochromeImage": "./assets/images/icon.png"
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.standardbank.stanic.clone"
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/logo.png"
+      "favicon": "./assets/images/icon.png"
     },
     "plugins": [
       "expo-router",
@@ -31,8 +31,8 @@
         {
           "backgroundColor": "#003ccd",
           "android": {
-            "image": "./assets/images/logo.png",
-            "imageWidth": 76
+            "image": "./assets/images/icon.png",
+            "imageWidth": 90
           }
         }
       ],
@@ -40,7 +40,15 @@
       "@react-native-vector-icons/ionicons",
       "@react-native-vector-icons/feather",
       "@react-native-vector-icons/material-icons",
-      "expo-sharing"
+      "expo-sharing",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Standard Bank requires your location to verify where transactions are made.",
+          "locationWhenInUsePermission": "Standard Bank requires your location to verify where transactions are made.",
+          "isAndroidBackgroundLocationEnabled": false
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

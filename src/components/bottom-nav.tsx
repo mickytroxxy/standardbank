@@ -2,13 +2,13 @@ import { useRouter, type Href } from "expo-router";
 import { SymbolView, type AndroidSymbol, type SFSymbol } from "expo-symbols";
 import { useState } from "react";
 import {
-  Dimensions,
-  Modal,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-  type ViewStyle,
+    Dimensions,
+    Modal,
+    Pressable,
+    StyleSheet,
+    Text,
+    View,
+    type ViewStyle,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -55,7 +55,13 @@ const ITEMS: Item[] = [
     android: "shopping_cart",
     href: "/buy",
   },
-  { key: "more", label: "More", ios: "line.3.horizontal", android: "menu" },
+  {
+    key: "more",
+    label: "More",
+    ios: "line.3.horizontal",
+    android: "menu",
+    href: "/more",
+  },
 ];
 
 export function BottomNav({ active }: { active: NavKey }) {
