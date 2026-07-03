@@ -23,6 +23,7 @@ import {
 import { Brand, Spacing } from "@/constants/theme";
 import { useAppDispatch, useAppSelector } from "@/store";
 import { setBalances } from "@/store/account-info-slice";
+import { hideLoader, showLoader } from "@/store/ui-slice";
 import type { ProofMethod } from "./beneficiary-account";
 
 type Beneficiary = {
@@ -212,6 +213,7 @@ export default function ReviewDetailsScreen() {
       return;
     }
     setSubmitting(true);
+    dispatch(showLoader());
     const newAvailable = availableBalance - payment.amount;
     const newLatest = latestBalance - payment.amount;
     const d = new Date();
@@ -282,6 +284,7 @@ export default function ReviewDetailsScreen() {
         },
       });
     } catch (e) {
+      dispatch(hideLoader());
       setSubmitting(false);
       Alert.alert("Payment failed", e instanceof Error ? e.message : String(e));
     }

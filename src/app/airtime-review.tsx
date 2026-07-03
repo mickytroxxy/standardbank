@@ -21,6 +21,7 @@ import {
 import { Brand, Spacing } from "@/constants/theme";
 import { useAppDispatch, useAppSelector } from "@/store";
 import { setBalances } from "@/store/account-info-slice";
+import { hideLoader, showLoader } from "@/store/ui-slice";
 
 const MONTHS = [
   "Jan",
@@ -105,6 +106,7 @@ export default function AirtimeReviewScreen() {
     // ─────────────────────────────────────────────────────────────────────────
 
     setSubmitting(true);
+    dispatch(showLoader());
     const newAvailable = availableBalance - amount;
     const newLatest = latestBalance - amount;
     const d = new Date();
@@ -136,6 +138,7 @@ export default function AirtimeReviewScreen() {
         params: { network, amount: String(amount), phone },
       });
     } catch (e) {
+      dispatch(hideLoader());
       setSubmitting(false);
       Alert.alert(
         "Purchase failed",

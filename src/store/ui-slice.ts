@@ -5,6 +5,7 @@ export type UiState = {
   selectedBank: string | null;
   allowImmediatePayment: boolean;
   allowStandardBankTransfers: boolean;
+  isLoading: boolean;
 };
 
 const initialState: UiState = {
@@ -12,6 +13,7 @@ const initialState: UiState = {
   selectedBank: null,
   allowImmediatePayment: true,
   allowStandardBankTransfers: true,
+  isLoading: false,
 };
 
 const uiSlice = createSlice({
@@ -36,6 +38,12 @@ const uiSlice = createSlice({
     clearSelectedBank(state) {
       state.selectedBank = null;
     },
+    showLoader(state) {
+      state.isLoading = true;
+    },
+    hideLoader(state) {
+      state.isLoading = false;
+    },
   },
 });
 
@@ -46,6 +54,8 @@ export const {
   clearSelectedBank,
   setAllowImmediatePayment,
   setAllowStandardBankTransfers,
+  showLoader,
+  hideLoader,
 } = uiSlice.actions;
 
 export default uiSlice.reducer;

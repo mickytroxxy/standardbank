@@ -17,6 +17,7 @@ import { register, signIn, TITLES, type Title } from "@/api";
 import { Brand, Spacing } from "@/constants/theme";
 import { useAppDispatch } from "@/store";
 import { setAccountInfo } from "@/store/account-info-slice";
+import { hideLoader, showLoader } from "@/store/ui-slice";
 
 type Mode = "register" | "login";
 
@@ -30,7 +31,6 @@ export default function RegisterScreen() {
   const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
   const [pin, setPin] = useState("");
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   function resetError() {
@@ -48,7 +48,7 @@ export default function RegisterScreen() {
       if (!lastName.trim()) return setError("Enter your last name.");
     }
 
-    setBusy(true);
+    dispatch(showLoader());
     try {
       const info =
         mode === "register"
@@ -69,7 +69,7 @@ export default function RegisterScreen() {
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong.");
     } finally {
-      setBusy(false);
+      dispatch(hideLoader());
     }
   }
 

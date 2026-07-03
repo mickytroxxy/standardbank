@@ -17,7 +17,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { saveBeneficiary, type BankBeneficiary } from "@/api";
 import { Brand, Spacing } from "@/constants/theme";
 import { useAppDispatch, useAppSelector } from "@/store";
-import { clearSelectedBank } from "@/store/ui-slice";
+import { clearSelectedBank, hideLoader, showLoader } from "@/store/ui-slice";
 
 export type ProofMethod = "None" | "SMS" | "Email" | "Fax";
 const PROOF_METHODS: ProofMethod[] = ["None", "SMS", "Email", "Fax"];
@@ -87,6 +87,7 @@ export default function BeneficiaryAccountScreen() {
     };
     if (save && phoneNumber) {
       setSubmitting(true);
+      dispatch(showLoader());
       try {
         const payload: Omit<BankBeneficiary, "id"> = {
           type: "bank",
@@ -101,9 +102,11 @@ export default function BeneficiaryAccountScreen() {
         };
         await saveBeneficiary(phoneNumber, payload);
       } catch {
+        dispatch(hideLoader());
         setSubmitting(false);
         return;
       }
+      dispatch(hideLoader());
       setSubmitting(false);
     }
     router.push({

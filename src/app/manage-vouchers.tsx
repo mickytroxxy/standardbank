@@ -2,7 +2,6 @@ import { useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { useCallback, useEffect, useState } from "react";
 import {
-    ActivityIndicator,
     Alert,
     FlatList,
     Pressable,
@@ -21,7 +20,8 @@ import {
 } from "@/api";
 import { ChangePinModal } from "@/components/change-pin-modal";
 import { Brand, Spacing } from "@/constants/theme";
-import { useAppSelector } from "@/store";
+import { useAppDispatch, useAppSelector } from "@/store";
+import { hideLoader, showLoader } from "@/store/ui-slice";
 
 type Tab = "beneficiary" | "your";
 
@@ -32,22 +32,22 @@ function localPhone(p: string): string {
 export default function ManageVouchersScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const dispatch = useAppDispatch();
   const phoneNumber = useAppSelector((s) => s.accountInfo.phoneNumber);
   const [tab, setTab] = useState<Tab>("beneficiary");
   const [vouchers, setVouchers] = useState<Voucher[]>([]);
-  const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Voucher | null>(null);
 
   const load = useCallback(async () => {
     if (!phoneNumber) return;
-    setLoading(true);
+    dispatch(showLoader());
     try {
       const list = await fetchVouchers(phoneNumber);
       setVouchers(list);
     } finally {
-      setLoading(false);
+      dispatch(hideLoader());
     }
-  }, [phoneNumber]);
+  }, [phoneNumber, dispatch]);
 
   useEffect(() => {
     load();
@@ -166,26 +166,19 @@ export default function ManageVouchersScreen() {
         <Text style={styles.payNewText}>Pay a new cell phone number</Text>
       </Pressable>
 
-      {loading ? (
-        <ActivityIndicator
-          style={{ marginTop: Spacing.four }}
-          color={Brand.blue}
-        />
-      ) : (
-        <FlatList
-          data={data}
-          keyExtractor={(v) => v.id ?? v.voucherNumber}
-          renderItem={renderVoucher}
-          contentContainerStyle={styles.list}
-          ListEmptyComponent={
-            <Text style={styles.empty}>
-              {tab === "beneficiary"
-                ? "No beneficiary vouchers yet."
-                : "No vouchers issued to you yet."}
-            </Text>
-          }
-        />
-      )}
+      <FlatList
+        data={data}
+        keyExtractor={(v) => v.id ?? v.voucherNumber}
+        renderItem={renderVoucher}
+        contentContainerStyle={styles.list}
+        ListEmptyComponent={
+          <Text style={styles.empty}>
+            {tab === "beneficiary"
+              ? "No beneficiary vouchers yet."
+              : "No vouchers issued to you yet."}
+          </Text>
+        }
+      />
 
       <ChangePinModal
         visible={editing != null}

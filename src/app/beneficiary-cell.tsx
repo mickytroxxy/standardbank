@@ -16,7 +16,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { saveBeneficiary, type CellBeneficiary } from "@/api";
 import { Brand, Spacing } from "@/constants/theme";
-import { useAppSelector } from "@/store";
+import { useAppDispatch, useAppSelector } from "@/store";
+import { hideLoader, showLoader } from "@/store/ui-slice";
 
 type FloatingFieldProps = {
   label: string;
@@ -136,6 +137,7 @@ const floatStyles = StyleSheet.create({
 export default function BeneficiaryCellScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const dispatch = useAppDispatch();
   const phoneNumber = useAppSelector((s) => s.accountInfo.phoneNumber);
   const [phone, setPhone] = useState("");
   const [name, setName] = useState("");
@@ -164,12 +166,15 @@ export default function BeneficiaryCellScreen() {
     };
     if (save && phoneNumber) {
       setSubmitting(true);
+      dispatch(showLoader());
       try {
         await saveBeneficiary(phoneNumber, payload);
       } catch {
+        dispatch(hideLoader());
         setSubmitting(false);
         return;
       }
+      dispatch(hideLoader());
       setSubmitting(false);
     }
     router.push({

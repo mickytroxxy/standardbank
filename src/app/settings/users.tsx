@@ -23,6 +23,8 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { MaterialDesignIcons } from "@react-native-vector-icons/material-design-icons";
+import { useAppDispatch } from "@/store";
+import { hideLoader, showLoader } from "@/store/ui-slice";
 
 function isEmail(val?: string): boolean {
   if (!val) return false;
@@ -44,8 +46,8 @@ function generateTopUpReference(): string {
 export default function UsersScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const dispatch = useAppDispatch();
   const [users, setUsers] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
   const [txModalOpen, setTxModalOpen] = useState(false);
   const [topUpModalOpen, setTopUpModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<any | null>(null);
@@ -56,16 +58,16 @@ export default function UsersScreen() {
   const [topUpPending, setTopUpPending] = useState(false);
 
   const load = useCallback(async () => {
-    setLoading(true);
+    dispatch(showLoader());
     try {
       const all = await fetchAllAccounts();
       setUsers(all);
     } catch (e) {
       Alert.alert("Error", e instanceof Error ? e.message : String(e));
     } finally {
-      setLoading(false);
+      dispatch(hideLoader());
     }
-  }, []);
+  }, [dispatch]);
 
   useEffect(() => {
     let active = true;

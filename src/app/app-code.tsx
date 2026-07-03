@@ -9,6 +9,7 @@ import { signIn } from "@/api";
 import { Brand, Spacing } from "@/constants/theme";
 import { useAppDispatch, useAppSelector } from "@/store";
 import { setAccountInfo } from "@/store/account-info-slice";
+import { hideLoader, showLoader } from "@/store/ui-slice";
 
 const CODE_LENGTH = 5;
 
@@ -19,7 +20,6 @@ export default function AppCodeScreen() {
   const inputRef = useRef<TextInput>(null);
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => inputRef.current?.focus(), 350);
@@ -30,14 +30,14 @@ export default function AppCodeScreen() {
     const digits = value.replace(/[^0-9]/g, "").slice(0, CODE_LENGTH);
     setCode(digits);
     if (error) setError(null);
-    if (digits.length !== CODE_LENGTH || submitting) return;
+    if (digits.length !== CODE_LENGTH) return;
 
     if (!phoneNumber) {
       setError("Missing phone number. Please go back and enter it.");
       return;
     }
 
-    setSubmitting(true);
+    dispatch(showLoader());
     try {
       const info = await signIn(phoneNumber, digits);
       if (!info) {
@@ -52,7 +52,7 @@ export default function AppCodeScreen() {
       setError("Could not sign in. Check your connection and try again.");
       setCode("");
     } finally {
-      setSubmitting(false);
+      dispatch(hideLoader());
     }
   }
 
