@@ -87,7 +87,7 @@ async function appendFileToFormData(formData: FormData, uri: string) {
   }
 }
 
-function buildProofOfPaymentHtml(args: {
+export function buildProofOfPaymentHtml(args: {
   tx: Transaction;
   amountText: string;
   holderName: string;
@@ -97,16 +97,7 @@ function buildProofOfPaymentHtml(args: {
   logoUri: string;
   isImmediate: boolean;
 }): string {
-  const {
-    tx,
-    amountText,
-    holderName,
-    accountNumber,
-    generatedAt,
-    reference,
-    logoUri,
-    isImmediate,
-  } = args;
+  const { tx, amountText, holderName, reference, logoUri, isImmediate } = args;
   const e = escapeHtml;
   const paymentDate = formatPaymentDate(tx.date ?? tx.fullDate ?? "—");
   const paymentTime = formatPaymentTime(tx.time ?? "");
@@ -137,12 +128,12 @@ function buildProofOfPaymentHtml(args: {
   .field-list { margin: 14px 0 0; padding: 0; }
   .row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; }
   .row-label { color: #000; width: 45%; font-weight: 700; }
-  .row-value { color: #1d2533; font-weight: 400; text-align: right; width: 50%; }
+  .row-value { color: #1d2533; font-weight: 400; text-align: left; width: 50%; }
   .group { margin-top: 24px; }
   .group strong { font-weight: 700; }
   .signature { margin-top: 30px; }
   .signature p { margin-bottom: 2px; }
-  .footer { position: fixed; bottom: 0; left: 48px; right: 48px; padding-top: 14px; border-top: 1px solid #dfe3e8; font-size: 10px; color: #6b7280; line-height: 1.5; margin: 0; background: #fff; }
+  .footer { position: fixed; bottom: 0; left: 48px; right: 48px; padding-top: 14px; border-top: 1px solid #dfe3e8; font-size: 11px; color: #575d68ff; line-height: 1.5; margin: 0; background: #fff; }
 </style>
 </head>
 <body>
@@ -171,7 +162,7 @@ function buildProofOfPaymentHtml(args: {
       <p>${isImmediate ? "Immediate Payment Confirmation" : "Payment Confirmation"}</p>
 
       <div class="field-list">
-        ${row("Reference number", tx.myRef?.trim() ? tx.myRef : reference)}
+        ${row("Reference number", reference)}
         ${row("Beneficiary name", tx.beneficiaryName ?? tx.title ?? "—")}
         ${row("Bank name", tx.sub ?? "—")}
         ${row("Beneficiary account number", maskAccountNumber(tx.account ?? "—"))}
@@ -182,14 +173,14 @@ function buildProofOfPaymentHtml(args: {
       </div>
 
       <div class="group">
-        <p>If you need more information or have any questions about this payment, please contact:</p>
-        <p><strong>${e(holderName)}</strong></p>
+        <div>If you need more information or have any questions about this payment, please contact:</div>
+        <div style="margin-top: 8px;"><strong>${e(holderName)}</strong></div>
       </div>
 
       <div class="group">
-        <p>Immediate payments may take a few hours.</p>
-        <p>Non-immediate payments to Standard Bank accounts may take up to 24 hours.</p>
-        <p>Non-immediate payments to other banks may take up to three business days.</p>
+        <div>Immediate payments may take a few hours.</div>
+        <div style="margin-top: 8px;">Non-immediate payments to Standard Bank accounts may take up to 24 hours.</div>
+        <div style="margin-top: 8px;">Non-immediate payments to other banks may take up to three business days.</div>
       </div>
 
       <div class="group">
@@ -272,17 +263,19 @@ export default function TransactionDetailsScreen() {
       hour: "2-digit",
       minute: "2-digit",
     });
-    const reference = tx.myRef?.trim()
-      ? tx.myRef.trim()
-      : (() => {
-          const yy = String(now.getFullYear()).slice(-2);
-          const mm = String(now.getMonth() + 1).padStart(2, "0");
-          const dd = String(now.getDate()).padStart(2, "0");
-          const refId = Array.from({ length: 8 }, () =>
-            Math.floor(Math.random() * 10),
-          ).join("");
-          return `${yy}${mm}${dd}SBGRPP${refId}C${refId}`;
-        })();
+    const reference = tx.referenceNumber?.trim()
+      ? tx.referenceNumber.trim()
+      : tx.myRef?.trim()
+        ? tx.myRef.trim()
+        : (() => {
+            const yy = String(now.getFullYear()).slice(-2);
+            const mm = String(now.getMonth() + 1).padStart(2, "0");
+            const dd = String(now.getDate()).padStart(2, "0");
+            const refId = Array.from({ length: 8 }, () =>
+              Math.floor(Math.random() * 10),
+            ).join("");
+            return `${yy}${mm}${dd}SBGRPP${refId}C${refId}`;
+          })();
     const logoAsset = Asset.fromModule(
       require("../../assets/images/logo.png") as number,
     );
@@ -448,6 +441,12 @@ export default function TransactionDetailsScreen() {
                   <Text style={styles.bnName}>{tx.beneficiaryName}</Text>
                   <Text style={styles.bnAccount}>{tx.account}</Text>
                   <Text style={styles.bnRef}>{tx.myRef ?? tx.title}</Text>
+                  {(tx.notificationValue || tx.proofContact) && (
+                    <Text style={styles.notificationInfo}>
+                      {tx.notificationType === "email" ? "📧" : "📱"}{" "}
+                      {tx.notificationValue || tx.proofContact}
+                    </Text>
+                  )}
                 </View>
                 <Pressable
                   onPress={() => setMenuOpen((v) => !v)}
@@ -610,6 +609,12 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   bnRef: { color: Brand.textMuted, fontSize: 14, marginTop: 2 },
+  notificationInfo: {
+    color: Brand.blue,
+    fontSize: 14,
+    marginTop: 2,
+    fontWeight: "600",
+  },
   menuBtn: { paddingHorizontal: Spacing.two, paddingTop: 2 },
   menu: {
     position: "absolute",

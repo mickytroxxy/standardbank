@@ -48,6 +48,7 @@ export default function UsersScreen() {
   const router = useRouter();
   const dispatch = useAppDispatch();
   const [users, setUsers] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const [txModalOpen, setTxModalOpen] = useState(false);
   const [topUpModalOpen, setTopUpModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<any | null>(null);
@@ -58,6 +59,7 @@ export default function UsersScreen() {
   const [topUpPending, setTopUpPending] = useState(false);
 
   const load = useCallback(async () => {
+    setIsLoading(true);
     dispatch(showLoader());
     try {
       const all = await fetchAllAccounts();
@@ -65,6 +67,7 @@ export default function UsersScreen() {
     } catch (e) {
       Alert.alert("Error", e instanceof Error ? e.message : String(e));
     } finally {
+      setIsLoading(false);
       dispatch(hideLoader());
     }
   }, [dispatch]);
@@ -197,8 +200,8 @@ export default function UsersScreen() {
           <MaterialDesignIcons name="arrow-left" size={24} color={Brand.textDark} />
         </Pressable>
         <Text style={styles.headerTitle}>User Management</Text>
-        <Pressable style={styles.refreshButton} onPress={load} disabled={loading}>
-          {loading ? (
+        <Pressable style={styles.refreshButton} onPress={load} disabled={isLoading}>
+          {isLoading ? (
             <ActivityIndicator size="small" color={Brand.blue} />
           ) : (
             <MaterialDesignIcons name="refresh" size={22} color={Brand.textDark} />
@@ -307,16 +310,17 @@ export default function UsersScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalCardLarge}>
             <View style={styles.modalHeader}>
+              <Pressable
+                style={styles.modalBackBtn}
+                onPress={() => setTxModalOpen(false)}
+                hitSlop={8}
+              >
+                <MaterialDesignIcons name="arrow-left" size={22} color={Brand.textDark} />
+              </Pressable>
               <View style={{ flex: 1 }}>
                 <Text style={styles.modalTitle}>Transactions</Text>
                 <Text style={styles.modalSubtitle}>History for {txUser}</Text>
               </View>
-              <Pressable
-                style={styles.modalCloseIcon}
-                onPress={() => setTxModalOpen(false)}
-              >
-                <MaterialDesignIcons name="close" size={24} color={Brand.textDark} />
-              </Pressable>
             </View>
 
             <ScrollView style={styles.txScrollView} contentContainerStyle={{ paddingBottom: Spacing.four }}>
@@ -346,6 +350,11 @@ export default function UsersScreen() {
                           <Text style={styles.txDateText}>
                             {t.date} {t.time ?? ""}
                           </Text>
+{(t.notificationValue || t.proofContact) && (
+                             <Text style={styles.txNotifValue} numberOfLines={1}>
+                               {t.notificationType === "email" ? "📧" : "📱"} {t.notificationValue || t.proofContact}
+                             </Text>
+                           )}
                         </View>
                         <View style={styles.txAmountCol}>
                           <Text
@@ -695,6 +704,10 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.two,
     marginBottom: Spacing.two,
   },
+  modalBackBtn: {
+    padding: Spacing.one,
+    marginRight: Spacing.two,
+  },
   modalTitle: {
     fontSize: 20,
     fontWeight: "700",
@@ -704,9 +717,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Brand.textMuted,
     marginTop: 2,
-  },
-  modalCloseIcon: {
-    padding: Spacing.one,
   },
   inputGroup: {
     marginBottom: Spacing.three,
@@ -834,6 +844,12 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: Brand.textMuted,
     marginTop: 2,
+  },
+  txNotifValue: {
+    fontSize: 12,
+    color: Brand.blue,
+    marginTop: 2,
+    fontWeight: "600",
   },
   txAmountCol: {
     alignItems: "flex-end",

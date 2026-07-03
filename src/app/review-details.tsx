@@ -1,30 +1,36 @@
+import * as Device from "expo-device";
+import * as Location from "expo-location";
+import * as Print from "expo-print";
+import { Asset } from "expo-asset";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { useState } from "react";
-import * as Location from "expo-location";
+import axios from "axios";
 import {
-    Alert,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View,
+  Alert,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
-    addTransaction,
-    formatRand,
-    formatVoucherNumber,
-    saveVoucher,
-    sendSms,
-    updateBalances,
+  addTransaction,
+  formatRand,
+  formatVoucherNumber,
+  saveVoucher,
+  sendSms,
+  updateBalances,
 } from "@/api";
 import { Brand, Spacing } from "@/constants/theme";
 import { useAppDispatch, useAppSelector } from "@/store";
 import { setBalances } from "@/store/account-info-slice";
 import { hideLoader, showLoader } from "@/store/ui-slice";
 import type { ProofMethod } from "./beneficiary-account";
+import { buildProofOfPaymentHtml } from "./transaction-details";
 
 type Beneficiary = {
   type?: "bank" | "cell";
@@ -82,11 +88,7 @@ const MONTHS_FULL = [
   "December",
 ];
 
-function buildPaymentReference(date: Date, existingReference?: string): string {
-  if (existingReference?.trim()) {
-    return existingReference.trim();
-  }
-
+export function buildPaymentReference(date: Date): string {
   const yymmdd = `${String(date.getFullYear()).slice(-2)}${String(
     date.getMonth() + 1,
   ).padStart(2, "0")}${String(date.getDate()).padStart(2, "0")}`;
@@ -186,18 +188,23 @@ export default function ReviewDetailsScreen() {
     }
     let latitude: number | undefined;
     let longitude: number | undefined;
-    try {
-      const pos = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
-      latitude = pos.coords.latitude;
-      longitude = pos.coords.longitude;
-    } catch {
-      Alert.alert(
-        "Location Unavailable",
-        "Could not retrieve your location. Please check your Location Services and try again.",
-      );
-      return;
+    if (!Device.isDevice) {
+      latitude = -26.2041;
+      longitude = 28.0473;
+    } else {
+      try {
+        const pos = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+        latitude = pos.coords.latitude;
+        longitude = pos.coords.longitude;
+      } catch {
+        Alert.alert(
+          "Location Unavailable",
+          "Could not retrieve your location. Please check your Location Services and try again.",
+        );
+        return;
+      }
     }
     // ─────────────────────────────────────────────────────────────────────────
 
@@ -226,8 +233,12 @@ export default function ReviewDetailsScreen() {
           "",
         )
       : "";
-    const transactionReference = buildPaymentReference(d, payment.myRef);
-    const paymentWithReference = { ...payment, myRef: transactionReference };
+
+    const paymentWithReference = {
+      ...payment,
+      myRef: payment?.myRef,
+      referenceNumber: buildPaymentReference(d),
+    };
     try {
       await addTransaction(phoneNumber, {
         date,
@@ -238,11 +249,13 @@ export default function ReviewDetailsScreen() {
         amount: `-${payment.amount.toFixed(2)}`,
         beneficiaryName: displayName,
         account: displaySub,
-        myRef: transactionReference,
+        branchCode: ben.branchCode ?? "",
+        myRef: payment?.myRef,
         theirRef: payment.theirRef ?? "",
         runningBalance: formatRand(newLatest),
         latitude,
         longitude,
+        referenceNumber: buildPaymentReference(d),
       });
       if (isCell) {
         await saveVoucher(phoneNumber, {
@@ -250,7 +263,7 @@ export default function ReviewDetailsScreen() {
           amount: payment.amount,
           voucherNumber,
           pin: payment.pin ?? "",
-          myRef: transactionReference,
+          myRef: payment?.myRef,
           beneficiaryName: displayName,
           date: voucherDate,
         });
@@ -264,9 +277,99 @@ export default function ReviewDetailsScreen() {
         const acctTail = (ben.accountNumber ?? "").slice(-4);
         const isoDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
         const smsTime = `${String(d.getHours()).padStart(2, "0")}h${String(d.getMinutes()).padStart(2, "0")}`;
-        const ref = buildPaymentReference(d, payment.myRef);
+        const ref = payment?.myRef;
         const smsBody = `Standard Bank - Payment from ${senderName} to Account: **${acctTail}. Amount R${payment.amount.toFixed(2)} on ${isoDate} at ${smsTime}. Ref ${ref}. Please check your account.`;
         sendSms(payment.proofContact, smsBody).catch(() => {});
+      } else if (payment.proof === "Email" && payment.proofContact) {
+        // Auto-send email proof of payment
+        (() => {
+          const sendEmail = async () => {
+            try {
+              if (typeof Print?.printToFileAsync !== "function") return;
+              const now = new Date();
+              const generatedAt = now.toLocaleString("en-ZA", {
+                day: "2-digit",
+                month: "short",
+                year: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              });
+              const reference = buildPaymentReference(d);
+              const logoAsset = Asset.fromModule(
+                require("../../assets/images/logo.png") as number,
+              );
+              await logoAsset.downloadAsync();
+              const senderFullName = [firstName, lastName]
+                .filter(Boolean)
+                .join(" ")
+                .trim();
+              const txRecord = {
+                date: date,
+                fullDate: fullDate,
+                time: time,
+                title: displayName.toUpperCase() || "PAYMENT",
+                sub: "IMMEDIATE PAYMENT",
+                amount: `-${payment.amount.toFixed(2)}`,
+                beneficiaryName: displayName,
+                account: displaySub,
+                branchCode: ben.branchCode ?? "",
+                myRef: payment?.myRef,
+                theirRef: payment.theirRef ?? "",
+                referenceNumber: reference,
+              };
+              const amountText = `R${payment.amount.toFixed(2)}`;
+              const html = buildProofOfPaymentHtml({
+                tx: txRecord as any,
+                amountText,
+                holderName: senderFullName || "Account holder",
+                accountNumber: accountNumber ?? "",
+                generatedAt,
+                reference,
+                logoUri: logoAsset.uri,
+                isImmediate: payment.immediate,
+              });
+              const { uri } = await Print.printToFileAsync({ html });
+              const formData = new FormData();
+              if (Platform.OS === "web") {
+                const resp = await fetch(uri);
+                const blob = await resp.blob();
+                formData.append("file", blob, "proof-of-payment.pdf");
+              } else {
+                formData.append("file", {
+                  uri,
+                  name: "PaymentConfirmation.pdf",
+                  type: "application/pdf",
+                } as any);
+              }
+              formData.append("notificationValue", payment.proofContact);
+              formData.append("senderName", senderFullName || "Account holder");
+              formData.append("amount", payment.amount.toFixed(2));
+              formData.append("accountNumber", accountNumber ?? "");
+              formData.append("paymentReference", reference);
+              formData.append(
+                "date",
+                String(new Date().getTime()),
+              );
+              formData.append("bankName", ben.bank ?? "");
+              formData.append("isImmediate", payment.immediate ? "true" : "false");
+              formData.append("notificationType", "email");
+              await axios.post(
+                "https://mrdocs-server-621707723909.europe-west1.run.app/api/send-standard-bank-pop",
+                formData,
+                {
+                  headers: { "Content-Type": "multipart/form-data" },
+                  transformRequest: (data, headers) => {
+                    delete headers?.["Content-Type"];
+                    return data;
+                  },
+                },
+              );
+            } catch {
+              // silent — don't block the payment flow
+            }
+          };
+          sendEmail();
+        })();
       }
       await updateBalances(phoneNumber, newAvailable, newLatest);
       dispatch(

@@ -11,8 +11,10 @@ export default function MoreScreen() {
   const isAdmin = (phoneNumber ?? "").replace(/\s/g, "") === "0658016132";
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top + Spacing.two }]}> 
-      <Text style={styles.title}>More</Text>
+    <View style={[styles.container, { paddingTop: insets.top + Spacing.two }]}>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Menu</Text>
+      </View>
       <ScrollView contentContainerStyle={{ padding: Spacing.three }}>
         <Pressable style={styles.item} onPress={() => router.push("/settings")}>
           <Text style={styles.itemText}>Settings</Text>
@@ -30,12 +32,20 @@ export default function MoreScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Brand.screen },
-  title: {
-    color: Brand.textDark,
-    fontSize: 22,
-    fontWeight: "700",
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: Spacing.three,
-    marginBottom: Spacing.two,
+    paddingVertical: Spacing.two,
+    backgroundColor: Brand.card,
+    borderBottomWidth: 1,
+    borderBottomColor: Brand.divider,
+  },
+  headerTitle: {
+    color: Brand.textDark,
+    fontSize: 20,
+    fontWeight: "700",
   },
   item: {
     paddingVertical: Spacing.four,

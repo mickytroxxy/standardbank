@@ -1,27 +1,28 @@
+import * as Location from "expo-location";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { useState } from "react";
-import * as Location from "expo-location";
 import {
-    Alert,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View,
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { addTransaction, formatRand, updateBalances } from "@/api";
 import {
-    NetworkLogo,
-    networkDisplay,
-    type NetworkId,
+  NetworkLogo,
+  networkDisplay,
+  type NetworkId,
 } from "@/components/network-logo";
 import { Brand, Spacing } from "@/constants/theme";
 import { useAppDispatch, useAppSelector } from "@/store";
 import { setBalances } from "@/store/account-info-slice";
 import { hideLoader, showLoader } from "@/store/ui-slice";
+import { buildPaymentReference } from "./review-details";
 
 const MONTHS = [
   "Jan",
@@ -123,6 +124,7 @@ export default function AirtimeReviewScreen() {
         amount: `-${amount.toFixed(2)}`,
         beneficiaryName: phone,
         runningBalance: formatRand(newLatest),
+        referenceNumber: buildPaymentReference(d),
         latitude,
         longitude,
       });

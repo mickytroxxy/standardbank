@@ -15,6 +15,7 @@ import {
   type Firestore,
 } from "firebase/firestore";
 import { Platform } from "react-native";
+import { buildPaymentReference } from "./app/review-details";
 
 const firebaseConfig = {
   apiKey: "AIzaSyD0dJUBCtG1vt6b-xywAasSw4liwrASMXE",
@@ -65,6 +66,7 @@ export type Transaction = {
   branchCode?: string;
   myRef?: string;
   theirRef?: string;
+  referenceNumber?: string;
   notificationValue?: string;
   notificationType?: string;
   proofContact?: string;
@@ -361,6 +363,7 @@ export async function topUpUserAccount(
     myRef: reference,
     theirRef: adminPhoneNumber ?? "ADMIN",
     senderName: adminPhoneNumber ?? "Admin",
+    referenceNumber: buildPaymentReference(d),
   });
 }
 

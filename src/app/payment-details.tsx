@@ -65,19 +65,7 @@ export default function PaymentDetailsScreen() {
   const allowImmediatePayment = useAppSelector(
     (s) => s.ui.allowImmediatePayment,
   );
-  const [myRef, setMyRef] = useState(() => {
-    if (ben.myRef?.trim()) {
-      return ben.myRef.trim();
-    }
-    const date = new Date();
-    const yymmdd = `${String(date.getFullYear()).slice(-2)}${String(
-      date.getMonth() + 1,
-    ).padStart(2, "0")}${String(date.getDate()).padStart(2, "0")}`;
-    const refId = Array.from({ length: 8 }, () =>
-      Math.floor(Math.random() * 10),
-    ).join("");
-    return `${yymmdd}SBGRPP${refId}C${refId}`;
-  });
+  const [myRef, setMyRef] = useState(ben.myRef ?? "");
   const [theirRef, setTheirRef] = useState(ben.theirRef ?? "");
   const [proof, setProof] = useState<ProofMethod>(ben.proof ?? "SMS");
   const [proofOpen, setProofOpen] = useState(false);
