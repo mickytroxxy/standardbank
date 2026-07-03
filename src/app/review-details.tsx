@@ -284,9 +284,10 @@ export default function ReviewDetailsScreen() {
         },
       });
     } catch (e) {
-      dispatch(hideLoader());
       setSubmitting(false);
       Alert.alert("Payment failed", e instanceof Error ? e.message : String(e));
+    } finally {
+      dispatch(hideLoader());
     }
   }
 

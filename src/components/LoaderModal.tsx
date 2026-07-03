@@ -36,14 +36,7 @@ const styles = StyleSheet.create({
   card: {
     width: 80,
     height: 80,
-    borderRadius: 16,
-    backgroundColor: "#ffffff",
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.18,
-    shadowRadius: 12,
-    elevation: 10,
   },
 });

@@ -39,6 +39,7 @@ export default function AppCodeScreen() {
 
     dispatch(showLoader());
     try {
+      router.back();
       const info = await signIn(phoneNumber, digits);
       if (!info) {
         setError("Incorrect app code. Please try again.");

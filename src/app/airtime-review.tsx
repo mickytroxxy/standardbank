@@ -138,12 +138,13 @@ export default function AirtimeReviewScreen() {
         params: { network, amount: String(amount), phone },
       });
     } catch (e) {
-      dispatch(hideLoader());
       setSubmitting(false);
       Alert.alert(
         "Purchase failed",
         e instanceof Error ? e.message : String(e),
       );
+    } finally {
+      dispatch(hideLoader());
     }
   }
 

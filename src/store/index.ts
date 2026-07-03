@@ -14,6 +14,8 @@ import {
     PURGE,
     REGISTER,
     REHYDRATE,
+    createTransform,
+    type PersistConfig,
 } from "redux-persist";
 
 import accountInfoReducer from "./account-info-slice";
@@ -24,10 +26,27 @@ const rootReducer = combineReducers({
   ui: uiReducer,
 });
 
-const persistConfig = {
+const uiTransform = createTransform(
+  (inboundState: any) => ({
+    ...inboundState,
+    isLoading: false,
+    proofSent: false,
+  }),
+  (outboundState: any) => ({
+    ...outboundState,
+    isLoading: false,
+    proofSent: false,
+  }),
+  { whitelist: ["ui"] }
+);
+
+export type RootState = ReturnType<typeof rootReducer>;
+
+const persistConfig: PersistConfig<RootState> = {
   key: "root",
   storage: AsyncStorage,
   whitelist: ["accountInfo", "ui"],
+  transforms: [uiTransform],
 };
 
 const persistedReducer = persistReducer(persistConfig, rootReducer);
@@ -44,7 +63,6 @@ export const store = configureStore({
 
 export const persistor = persistStore(store);
 
-export type RootState = ReturnType<typeof store.getState>;
 export type AppDispatch = typeof store.dispatch;
 
 export const useAppDispatch: () => AppDispatch = useDispatch;
