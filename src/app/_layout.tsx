@@ -4,11 +4,13 @@ import { Fragment } from "react";
 import { Provider } from "react-redux";
 import { PersistGate } from "redux-persist/integration/react";
 
-import { Brand } from "@/constants/theme";
 import LoaderModal from "@/components/LoaderModal";
+import { Brand } from "@/constants/theme";
+import { useOTA } from "@/hooks/useOTA";
 import { persistor, store } from "@/store";
 
 export default function RootLayout() {
+  const updates = useOTA();
   return (
     <Provider store={store}>
       <Fragment>
@@ -42,6 +44,9 @@ export default function RootLayout() {
             <Stack.Screen name="manage-vouchers" />
             <Stack.Screen name="buy" />
             <Stack.Screen name="airtime" />
+            <Stack.Screen name="more" />
+            <Stack.Screen name="settings" />
+
             <Stack.Screen name="airtime-purchase" />
             <Stack.Screen name="airtime-review" />
             <Stack.Screen

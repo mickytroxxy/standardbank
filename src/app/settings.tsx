@@ -5,8 +5,9 @@ import {
     setAllowStandardBankTransfers,
 } from "@/store/ui-slice";
 import { useRouter } from "expo-router";
-import { StyleSheet, Switch, Text, View } from "react-native";
+import { Pressable, StyleSheet, Switch, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SymbolView } from "expo-symbols";
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
@@ -21,55 +22,86 @@ export default function SettingsScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + Spacing.two }]}>
-      <Text style={styles.title}>Settings</Text>
-
-      <View style={styles.row}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.rowTitle}>Allow immediate payment</Text>
-          <Text style={styles.rowSub}>
-            Enable or disable immediate payments
-          </Text>
-        </View>
-        <Switch
-          value={allowImmediatePayment}
-          onValueChange={(v) => dispatch(setAllowImmediatePayment(v))}
-          trackColor={{ false: Brand.divider, true: Brand.blue }}
-          thumbColor={Brand.white}
-        />
+      <View style={styles.header}>
+        <Pressable
+          onPress={() => router.back()}
+          style={styles.backButton}
+          hitSlop={8}
+        >
+          <SymbolView
+            name={{
+              ios: "arrow.left",
+              android: "arrow_back",
+              web: "arrow_back",
+            }}
+            size={24}
+            tintColor={Brand.white}
+          />
+        </Pressable>
+        <Text style={styles.headerTitle}>Settings</Text>
       </View>
 
-      <View style={styles.row}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.rowTitle}>Allow Standard Bank transfers</Text>
-          <Text style={styles.rowSub}>
-            Allow sending payments to Standard Bank accounts
-          </Text>
+      <View style={styles.content}>
+        <View style={styles.row}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.rowTitle}>Allow immediate payment</Text>
+            <Text style={styles.rowSub}>
+              Enable or disable immediate payments
+            </Text>
+          </View>
+          <Switch
+            value={allowImmediatePayment}
+            onValueChange={(v) => dispatch(setAllowImmediatePayment(v))}
+            trackColor={{ false: Brand.divider, true: Brand.blue }}
+            thumbColor={Brand.white}
+          />
         </View>
-        <Switch
-          value={allowStandardBankTransfers}
-          onValueChange={(v) => dispatch(setAllowStandardBankTransfers(v))}
-          trackColor={{ false: Brand.divider, true: Brand.blue }}
-          thumbColor={Brand.white}
-        />
+
+        <View style={styles.row}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.rowTitle}>Allow Standard Bank transfers</Text>
+            <Text style={styles.rowSub}>
+              Allow sending payments to Standard Bank accounts
+            </Text>
+          </View>
+          <Switch
+            value={allowStandardBankTransfers}
+            onValueChange={(v) => dispatch(setAllowStandardBankTransfers(v))}
+            trackColor={{ false: Brand.divider, true: Brand.blue }}
+            thumbColor={Brand.white}
+          />
+        </View>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Brand.screen },
-  title: {
-    color: Brand.textDark,
-    fontSize: 22,
-    fontWeight: "700",
-    paddingHorizontal: Spacing.three,
-    marginBottom: Spacing.four,
-  },
-  row: {
+  container: { flex: 1, backgroundColor: Brand.blue },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: Brand.blue,
     paddingHorizontal: Spacing.three,
     paddingVertical: Spacing.two,
+  },
+  backButton: { paddingRight: Spacing.two },
+  headerTitle: {
+    flex: 1,
+    color: Brand.white,
+    fontSize: 22,
+    fontWeight: "400",
+  },
+  content: {
+    backgroundColor: Brand.screen,
+    flex: 1,
+    paddingHorizontal: Spacing.three,
+    paddingTop: Spacing.three,
+  },
+  row: {
+    paddingVertical: Spacing.three,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Brand.cardBorder,
+    borderBottomColor: Brand.divider,
     flexDirection: "row",
     alignItems: "center",
   },

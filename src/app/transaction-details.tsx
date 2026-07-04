@@ -1,5 +1,4 @@
 import Ionicons from "@react-native-vector-icons/ionicons";
-import axios from "axios";
 import { Asset } from "expo-asset";
 import * as Print from "expo-print";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -9,21 +8,19 @@ import { useEffect, useState } from "react";
 import {
   Alert,
   Linking,
-  Modal,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
-  View,
+  View
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import type { Transaction } from "@/api";
 import { Brand, Spacing } from "@/constants/theme";
 import { useAppDispatch, useAppSelector } from "@/store";
-import { clearProofSent, setProofSent } from "@/store/ui-slice";
+import { clearProofSent } from "@/store/ui-slice";
 
 const SUPPORT_NUMBER = "0860 123 000";
 const SEND_POP_ENDPOINT =
@@ -214,9 +211,6 @@ export default function TransactionDetailsScreen() {
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [toastVisible, setToastVisible] = useState(false);
-  const [emailModalVisible, setEmailModalVisible] = useState(false);
-  const [emailInput, setEmailInput] = useState("");
-  const [sendingProof, setSendingProof] = useState(false);
 
   useEffect(() => {
     if (!proofSent) return;
@@ -313,62 +307,6 @@ export default function TransactionDetailsScreen() {
     }
   };
 
-  const handleSend = async (email: string) => {
-    const normalizedEmail = email.trim();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
-      Alert.alert("Invalid email", "Please enter a valid email address.");
-      return;
-    }
-
-    setSendingProof(true);
-    try {
-      const { uri, reference } = await createProofPdfUri();
-      const amountValue = `${Math.abs(amountNum).toFixed(2)}`;
-      const paymentDate = `${new Date(
-        tx.fullDate ?? tx.date ?? new Date(),
-      ).getTime()}`;
-
-      const formData = new FormData();
-      await appendFileToFormData(formData, uri);
-      formData.append("notificationValue", normalizedEmail);
-      formData.append("senderName", holderName || "Account holder");
-      formData.append("amount", amountValue);
-      formData.append("accountNumber", tx.account ?? holderAccount ?? "");
-      formData.append("paymentReference", reference);
-      formData.append("date", paymentDate);
-      formData.append("bankName", "");
-      formData.append("isImmediate", isImmediate ? "true" : "false");
-      formData.append("notificationType", "email");
-
-      const response = await axios.post(SEND_POP_ENDPOINT, formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-        transformRequest: (data, headers) => {
-          delete headers?.["Content-Type"];
-          return data;
-        },
-      });
-
-      if (response.status !== 200 && response.status !== 201) {
-        throw new Error(
-          response.data?.message || "The proof could not be sent.",
-        );
-      }
-
-      setEmailModalVisible(false);
-      setEmailInput("");
-      setMenuOpen(false);
-      dispatch(setProofSent());
-      Alert.alert("Sent", "Proof of payment sent successfully.");
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      Alert.alert("Send failed", message);
-    } finally {
-      setSendingProof(false);
-    }
-  };
-
   return (
     <View style={styles.container}>
       <View style={[styles.header, { paddingTop: insets.top + Spacing.two }]}>
@@ -440,13 +378,6 @@ export default function TransactionDetailsScreen() {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.bnName}>{tx.beneficiaryName}</Text>
                   <Text style={styles.bnAccount}>{tx.account}</Text>
-                  <Text style={styles.bnRef}>{tx.myRef ?? tx.title}</Text>
-                  {(tx.notificationValue || tx.proofContact) && (
-                    <Text style={styles.notificationInfo}>
-                      {tx.notificationType === "email" ? "📧" : "📱"}{" "}
-                      {tx.notificationValue || tx.proofContact}
-                    </Text>
-                  )}
                 </View>
                 <Pressable
                   onPress={() => setMenuOpen((v) => !v)}
@@ -465,8 +396,11 @@ export default function TransactionDetailsScreen() {
                   <Pressable
                     style={styles.menuItem}
                     onPress={() => {
-                      setEmailInput("");
-                      setEmailModalVisible(true);
+                      setMenuOpen(false);
+                      router.push({
+                        pathname: "/send-proof-of-payment",
+                        params: { tx: JSON.stringify(tx) },
+                      });
                     }}
                   >
                     <Text style={styles.menuText}>Send</Text>
@@ -480,49 +414,6 @@ export default function TransactionDetailsScreen() {
           )}
         </ScrollView>
       </Pressable>
-
-      <Modal
-        transparent
-        animationType="fade"
-        visible={emailModalVisible}
-        onRequestClose={() => setEmailModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Send proof of payment</Text>
-            <Text style={styles.modalText}>
-              Enter the recipient email address
-            </Text>
-            <TextInput
-              value={emailInput}
-              onChangeText={setEmailInput}
-              placeholder="name@example.com"
-              placeholderTextColor={Brand.textMuted}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-              style={styles.modalInput}
-            />
-            <View style={styles.modalActions}>
-              <Pressable
-                style={styles.modalCancelBtn}
-                onPress={() => setEmailModalVisible(false)}
-              >
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.modalSendBtn, sendingProof && { opacity: 0.7 }]}
-                disabled={sendingProof}
-                onPress={() => handleSend(emailInput)}
-              >
-                <Text style={styles.modalSendText}>
-                  {sendingProof ? "Sending..." : "Send"}
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
 
       {toastVisible && (
         <View style={[styles.toast, { bottom: insets.bottom + Spacing.three }]}>

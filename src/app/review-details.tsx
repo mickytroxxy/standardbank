@@ -256,6 +256,8 @@ export default function ReviewDetailsScreen() {
         latitude,
         longitude,
         referenceNumber: buildPaymentReference(d),
+        notificationType: payment.proof !== "None" ? payment.proof.toLowerCase() : undefined,
+        notificationValue: payment.proofContact || undefined,
       });
       if (isCell) {
         await saveVoucher(phoneNumber, {

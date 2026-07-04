@@ -1,39 +1,61 @@
-import axios from "axios";
-import { MaterialDesignIcons } from "@react-native-vector-icons/material-design-icons";
-import { Asset } from "expo-asset";
-import * as Print from "expo-print";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import { SymbolView } from "expo-symbols";
-import * as Sharing from "expo-sharing";
-import { useEffect, useState } from "react";
-import {
-    Alert,
-    KeyboardAvoidingView,
-    Linking,
-    Modal,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
-} from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-
-import { sendSms } from "@/api";
+import { addTransaction, formatRand, sendSms } from "@/api";
 import type { Transaction } from "@/api";
 import { Brand, Spacing } from "@/constants/theme";
 import { useAppDispatch, useAppSelector } from "@/store";
 import { setProofSent } from "@/store/ui-slice";
+import { MaterialDesignIcons } from "@react-native-vector-icons/material-design-icons";
+import axios from "axios";
+import { Asset } from "expo-asset";
+import * as Print from "expo-print";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { SymbolView } from "expo-symbols";
+import { useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { buildProofOfPaymentHtml } from "./transaction-details";
 
-type Method = "Email" | "SMS";
-const METHODS: Method[] = ["Email", "SMS"];
+type Method = "Email - R 1.50" | "SMS - R 1.20";
 
 const SEND_POP_ENDPOINT =
-  "http://192.168.0.117:1337/api/send-standard-bank-pop";
+  "https://mrdocs-server-621707723909.europe-west1.run.app/api/send-standard-bank-pop";
 
-const SUPPORT_NUMBER = "0860 123 000";
+function formatPopDate(dateStr?: string): string {
+  if (!dateStr) return "—";
+  if (dateStr.includes(" ")) return dateStr;
+  const parts = dateStr.split("-");
+  if (parts.length === 3) {
+    const y = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10) - 1;
+    const d = parseInt(parts[2], 10);
+    const months = [
+      "January",
+      "February",
+      "March",
+      "April",
+      "May",
+      "June",
+      "July",
+      "August",
+      "September",
+      "October",
+      "November",
+      "December",
+    ];
+    return `${d} ${months[m]} ${y}`;
+  }
+  return dateStr;
+}
 
 export default function SendProofOfPaymentScreen() {
   const router = useRouter();
@@ -49,15 +71,17 @@ export default function SendProofOfPaymentScreen() {
     tx = {} as Transaction;
   }
 
-  const [method, setMethod] = useState<Method>("Email");
+  const [method, setMethod] = useState<Method>("Email - R 1.50");
   const [methodOpen, setMethodOpen] = useState(false);
-  const [email, setEmail] = useState("");
-  const [smsNumber, setSmsNumber] = useState("");
+  const [contactValue, setContactValue] = useState("");
+  const [recipientName, setRecipientName] = useState(
+    tx.beneficiaryName ?? tx.title ?? "",
+  );
   const [sending, setSending] = useState(false);
 
   const amountNum = parseFloat(tx.amount ?? "0");
   const absAmount = Math.abs(amountNum).toFixed(2);
-  const amountText = `-R ${absAmount}`;
+  const amountText = `R ${absAmount}`;
 
   const holderName = [holder.title, holder.firstName, holder.lastName]
     .filter(Boolean)
@@ -66,10 +90,10 @@ export default function SendProofOfPaymentScreen() {
   const holderAccount = holder.accountNumber ?? "";
   const isImmediate = tx.sub?.toUpperCase() === "IMMEDIATE PAYMENT";
 
-  const canSend =
-    method === "Email"
-      ? /.+@.+\..+/.test(email.trim())
-      : smsNumber.replace(/[^0-9]/g, "").length >= 10;
+  const isEmailMode = method.startsWith("Email");
+  const canSend = isEmailMode
+    ? /.+@.+\..+/.test(contactValue.trim())
+    : contactValue.replace(/[^0-9]/g, "").length >= 10;
 
   const createProofPdfUri = async () => {
     const now = new Date();
@@ -80,16 +104,27 @@ export default function SendProofOfPaymentScreen() {
       hour: "2-digit",
       minute: "2-digit",
     });
-    const reference = tx.myRef?.trim()
-      ? tx.myRef.trim()
-      : `POP${now.getTime().toString().slice(-10)}`;
+    const reference = tx.referenceNumber?.trim()
+      ? tx.referenceNumber.trim()
+      : tx.myRef?.trim()
+        ? tx.myRef.trim()
+        : (() => {
+            const yy = String(now.getFullYear()).slice(-2);
+            const mm = String(now.getMonth() + 1).padStart(2, "0");
+            const dd = String(now.getDate()).padStart(2, "0");
+            const refId = Array.from({ length: 8 }, () =>
+              Math.floor(Math.random() * 10),
+            ).join("");
+            return `${yy}${mm}${dd}SBGRPP${refId}C${refId}`;
+          })();
+
     const logoAsset = Asset.fromModule(
       require("../../assets/images/logo.png") as number,
     );
     await logoAsset.downloadAsync();
     const html = buildProofOfPaymentHtml({
       tx,
-      amountText,
+      amountText: `R${absAmount}`,
       holderName: holderName || "Account holder",
       accountNumber: holderAccount,
       generatedAt,
@@ -109,14 +144,14 @@ export default function SendProofOfPaymentScreen() {
     } else {
       formData.append("file", {
         uri,
-        name: "proof-of-payment.pdf",
+        name: "PaymentConfirmation.pdf",
         type: "application/pdf",
       } as any);
     }
   }
 
   async function handleSend() {
-    if (!canSend) return;
+    if (!canSend || sending) return;
     setSending(true);
 
     try {
@@ -127,7 +162,7 @@ export default function SendProofOfPaymentScreen() {
 
       const formData = new FormData();
       await appendFileToFormData(formData, uri);
-      formData.append("notificationValue", method === "Email" ? email.trim() : smsNumber);
+      formData.append("notificationValue", contactValue.trim());
       formData.append("senderName", holderName || "Account holder");
       formData.append("amount", absAmount);
       formData.append("accountNumber", tx.account ?? holderAccount ?? "");
@@ -135,9 +170,9 @@ export default function SendProofOfPaymentScreen() {
       formData.append("date", paymentDate);
       formData.append("bankName", "");
       formData.append("isImmediate", isImmediate ? "true" : "false");
-      formData.append("notificationType", method.toLowerCase());
+      formData.append("notificationType", isEmailMode ? "email" : "sms");
 
-      if (method === "Email") {
+      if (isEmailMode) {
         const response = await axios.post(SEND_POP_ENDPOINT, formData, {
           headers: {
             "Content-Type": "multipart/form-data",
@@ -152,12 +187,17 @@ export default function SendProofOfPaymentScreen() {
           throw new Error(response.data?.message || "Failed to send email.");
         }
       } else {
-        const success = await sendSms(smsNumber, `Payment of ${amountText} sent to ${tx.beneficiaryName ?? tx.title}. Ref: ${reference}`);
+        const success = await sendSms(
+          contactValue,
+          `Payment of R ${absAmount} sent to ${recipientName}. Ref: ${reference}`,
+        );
         if (!success) throw new Error("Failed to send SMS.");
       }
 
       dispatch(setProofSent());
-      router.back();
+      Alert.alert("Success", "Proof of payment sent successfully.", [
+        { text: "OK", onPress: () => router.back() },
+      ]);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       Alert.alert("Send failed", message);
@@ -168,23 +208,21 @@ export default function SendProofOfPaymentScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={[styles.header, { paddingTop: insets.top + Spacing.two }]}>
-        <Pressable
-          onPress={() => router.back()}
-          style={styles.back}
-          hitSlop={8}
-        >
-          <SymbolView
-            name={{
-              ios: "arrow.left",
-              android: "arrow_back",
-              web: "arrow_back",
-            }}
-            size={24}
-            tintColor={Brand.white}
-          />
-        </Pressable>
-        <Text style={styles.headerTitle}>SEND</Text>
+      {/* Header Container wraps the header and colors the status bar area blue */}
+      <View style={{ backgroundColor: Brand.blue, paddingTop: insets.top }}>
+        <View style={styles.header}>
+          <Pressable style={styles.backBtn} onPress={() => router.back()} hitSlop={8}>
+            <MaterialDesignIcons name="arrow-left" size={24} color={Brand.white} />
+          </Pressable>
+          <Text style={styles.headerTitle}>Send Proof Of Payment</Text>
+          <Pressable onPress={handleSend} disabled={!canSend || sending}>
+            {sending ? (
+              <ActivityIndicator size="small" color={Brand.white} />
+            ) : (
+              <Text style={[styles.sendText, !canSend && { opacity: 0.6 }]}>SEND</Text>
+            )}
+          </Pressable>
+        </View>
       </View>
 
       <KeyboardAvoidingView
@@ -192,253 +230,265 @@ export default function SendProofOfPaymentScreen() {
         style={{ flex: 1 }}
       >
         <ScrollView
-          contentContainerStyle={{ paddingBottom: Spacing.six }}
+          contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
-          <View style={styles.summary}>
-            <Text style={styles.summaryAmount}>{amountText}</Text>
-            <Text style={styles.summaryTitle}>
-              {tx.beneficiaryName ?? tx.title}
-            </Text>
-            <Text style={styles.summarySub}>{tx.fullDate ?? tx.date}</Text>
+          {/* Proof of Payment Details */}
+          <Text style={styles.sectionTitle}>Proof of payment</Text>
+
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Beneficiary name</Text>
+            <Text style={styles.detailValue}>{tx.beneficiaryName ?? tx.title ?? "—"}</Text>
           </View>
 
-          <View style={styles.section}>
-            <Text style={styles.fieldLabel}>Proof of payment method</Text>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Transaction date</Text>
+            <Text style={styles.detailValue}>
+              {formatPopDate(tx.fullDate ?? tx.date)}
+            </Text>
+          </View>
+
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Transaction time</Text>
+            <Text style={styles.detailValue}>{tx.time ?? "—"}</Text>
+          </View>
+
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>My reference</Text>
+            <Text style={styles.detailValue}>{tx.myRef || "—"}</Text>
+          </View>
+
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Their reference</Text>
+            <Text style={styles.detailValue}>{tx.theirRef || "—"}</Text>
+          </View>
+
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>To account</Text>
+            <Text style={styles.detailValue}>{tx.account ?? "—"}</Text>
+          </View>
+
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Transaction amount</Text>
+            <Text style={styles.detailValue}>{amountText}</Text>
+          </View>
+
+          {/* Selector / Dropdown */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Send using</Text>
             <Pressable
-              style={styles.dropdown}
+              style={styles.dropdownInput}
               onPress={() => setMethodOpen((v) => !v)}
             >
-              <Text style={styles.dropdownText}>{method}</Text>
-              <SymbolView
-                name={
-                  methodOpen
-                    ? {
-                        ios: "chevron.up",
-                        android: "keyboard_arrow_up",
-                        web: "keyboard_arrow_up",
-                      }
-                    : {
-                        ios: "chevron.down",
-                        android: "keyboard_arrow_down",
-                        web: "keyboard_arrow_down",
-                      }
-                }
-                size={20}
-                tintColor={Brand.blue}
-              />
+              <Text style={styles.dropdownInputValue}>{method}</Text>
+              <MaterialDesignIcons name="menu-down" size={24} color={Brand.navy} />
             </Pressable>
+
             {methodOpen && (
-              <View style={styles.dropdownList}>
-                {METHODS.map((m) => (
-                  <Pressable
-                    key={m}
-                    style={styles.dropdownItem}
-                    onPress={() => {
-                      setMethod(m);
-                      setMethodOpen(false);
-                    }}
-                  >
-                    <Text style={styles.dropdownItemText}>{m}</Text>
-                    {m === method && (
-                      <SymbolView
-                        name={{
-                          ios: "checkmark",
-                          android: "check",
-                          web: "check",
-                        }}
-                        size={18}
-                        tintColor={Brand.blue}
-                      />
-                    )}
-                  </Pressable>
-                ))}
+              <View style={styles.dropdownMenu}>
+                <Pressable
+                  style={styles.dropdownItem}
+                  onPress={() => {
+                    setMethod("Email - R 1.50");
+                    setMethodOpen(false);
+                  }}
+                >
+                  <Text style={styles.dropdownItemText}>Email - R 1.50</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.dropdownItem}
+                  onPress={() => {
+                    setMethod("SMS - R 1.20");
+                    setMethodOpen(false);
+                  }}
+                >
+                  <Text style={styles.dropdownItemText}>SMS - R 1.20</Text>
+                </Pressable>
               </View>
             )}
+          </View>
 
-            {method === "Email" ? (
-              <>
-                <Text style={[styles.fieldLabel, { marginTop: Spacing.four }]}>
-                  Email address
-                </Text>
-                <TextInput
-                  value={email}
-                  onChangeText={setEmail}
-                  placeholder="name@example.com"
-                  placeholderTextColor={Brand.textMuted}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  style={styles.input}
-                />
-              </>
-            ) : (
-              <>
-                <Text style={[styles.fieldLabel, { marginTop: Spacing.four }]}>
-                  Cell phone number
-                </Text>
-                <TextInput
-                  value={smsNumber}
-                  onChangeText={setSmsNumber}
-                  placeholder="0XX XXX XXXX"
-                  placeholderTextColor={Brand.textMuted}
-                  keyboardType="phone-pad"
-                  maxLength={13}
-                  style={styles.input}
-                />
-              </>
-            )}
-
-            <View style={styles.info}>
-              <MaterialDesignIcons
-                name="information-outline"
-                size={20}
-                color={Brand.blue}
+          {/* Contact Input Field */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>{isEmailMode ? "Email" : "Cellphone number"}</Text>
+            <View style={styles.textInputWrapper}>
+              <TextInput
+                value={contactValue}
+                onChangeText={setContactValue}
+                placeholder={isEmailMode ? "Enter recipient email" : "e.g. 082 123 4567"}
+                placeholderTextColor={Brand.textMuted}
+                keyboardType={isEmailMode ? "email-address" : "phone-pad"}
+                autoCapitalize="none"
+                style={styles.textInput}
               />
-              <Text style={styles.infoText}>
-                Standard data and SMS charges apply.
-              </Text>
+              <Pressable style={styles.addIconBtn}>
+                <MaterialDesignIcons name="plus-circle-outline" size={22} color={Brand.blue} />
+              </Pressable>
             </View>
+          </View>
+
+          {/* Recipient Name Field */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Their name</Text>
+            <TextInput
+              value={recipientName}
+              onChangeText={setRecipientName}
+              style={styles.textInput}
+            />
+          </View>
+
+          {/* Warning / Disclaimer Card */}
+          <View style={styles.warningCard}>
+            <View style={styles.infoIconWrapper}>
+              <MaterialDesignIcons name="information" size={20} color={Brand.navy} />
+            </View>
+            <Text style={styles.warningText}>
+              Please ensure you insert the correct recipient details before you send the proof of
+              payment. We are not responsible for any loss you may suffer as a result of you
+              entering the wrong recipient details.
+            </Text>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-
-      <View
-        style={[
-          styles.footer,
-          { paddingBottom: insets.bottom + Spacing.three },
-        ]}
-      >
-        <Pressable
-          style={[styles.sendBtn, !canSend && { opacity: 0.5 }]}
-          disabled={!canSend}
-          onPress={handleSend}
-        >
-          <Text style={styles.sendText}>SEND</Text>
-        </Pressable>
-      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Brand.white },
+  container: {
+    flex: 1,
+    backgroundColor: Brand.white,
+  },
   header: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
     backgroundColor: Brand.blue,
     paddingHorizontal: Spacing.three,
-    paddingBottom: Spacing.three,
+    paddingVertical: Spacing.two + 4,
   },
-  back: { paddingRight: Spacing.two },
+  backBtn: {
+    padding: Spacing.one,
+  },
   headerTitle: {
-    flex: 1,
     color: Brand.white,
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: "700",
-    letterSpacing: 1,
-  },
-  summary: {
-    alignItems: "center",
-    paddingVertical: Spacing.four,
-    paddingHorizontal: Spacing.three,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Brand.divider,
-  },
-  summaryAmount: {
-    color: "#D32F2F",
-    fontSize: 32,
-    fontWeight: "400",
-    marginBottom: Spacing.two,
-  },
-  summaryTitle: {
-    color: Brand.textDark,
-    fontSize: 14,
-    fontWeight: "700",
-    letterSpacing: 0.5,
-  },
-  summarySub: {
-    color: Brand.textMuted,
-    fontSize: 13,
-    marginTop: Spacing.one,
-  },
-  section: { padding: Spacing.three },
-  fieldLabel: {
-    color: Brand.textMuted,
-    fontSize: 13,
-    marginBottom: Spacing.two,
-  },
-  dropdown: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderBottomWidth: 1,
-    borderBottomColor: Brand.blue,
-    paddingVertical: Spacing.two,
-  },
-  dropdownText: {
-    color: Brand.textDark,
-    fontSize: 16,
-    fontWeight: "500",
-  },
-  dropdownList: {
-    backgroundColor: Brand.white,
-    borderRadius: 4,
-    marginTop: Spacing.one,
-    elevation: 4,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: Brand.divider,
-  },
-  dropdownItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.three,
-  },
-  dropdownItemText: { color: Brand.textDark, fontSize: 16 },
-  input: {
-    borderBottomWidth: 1,
-    borderBottomColor: Brand.blue,
-    paddingVertical: Spacing.two,
-    color: Brand.textDark,
-    fontSize: 16,
-  },
-  info: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: Spacing.two,
-    marginTop: Spacing.four,
-    padding: Spacing.three,
-    backgroundColor: "#EAF2FF",
-    borderRadius: 6,
-  },
-  infoText: {
     flex: 1,
-    color: Brand.textDark,
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  footer: {
-    paddingHorizontal: Spacing.three,
-    paddingTop: Spacing.three,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Brand.divider,
-  },
-  sendBtn: {
-    backgroundColor: Brand.blue,
-    borderRadius: 6,
-    paddingVertical: Spacing.three,
-    alignItems: "center",
+    marginLeft: Spacing.two,
   },
   sendText: {
     color: Brand.white,
     fontSize: 16,
     fontWeight: "700",
-    letterSpacing: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: Spacing.four,
+    paddingTop: Spacing.two,
+    paddingBottom: Spacing.six,
+  },
+  sectionTitle: {
+    color: Brand.blueDeep,
+    fontSize: 15,
+    fontWeight: "700",
+    marginTop: Spacing.two,
+    marginBottom: Spacing.three,
+  },
+  detailRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: Spacing.two - 1,
+  },
+  detailLabel: {
+    color: Brand.textMuted,
+    fontSize: 15,
+    fontWeight: "400",
+  },
+  detailValue: {
+    color: Brand.textDark,
+    fontSize: 15,
+    fontWeight: "500",
+  },
+  inputGroup: {
+    marginTop: Spacing.three,
+    marginBottom: Spacing.one,
+  },
+  inputLabel: {
+    color: Brand.textMuted,
+    fontSize: 12,
+    marginBottom: 4,
+  },
+  dropdownInput: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    borderBottomWidth: 1.2,
+    borderBottomColor: Brand.divider,
+    paddingVertical: Spacing.two,
+  },
+  dropdownInputValue: {
+    color: Brand.textDark,
+    fontSize: 16,
+    fontWeight: "400",
+  },
+  dropdownMenu: {
+    backgroundColor: Brand.white,
+    borderWidth: 1,
+    borderColor: Brand.divider,
+    borderRadius: 6,
+    marginTop: 4,
+    elevation: 3,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  dropdownItem: {
+    paddingVertical: Spacing.three,
+    paddingHorizontal: Spacing.three,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Brand.divider,
+  },
+  dropdownItemText: {
+    color: Brand.textDark,
+    fontSize: 15,
+  },
+  textInputWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderBottomWidth: 1.2,
+    borderBottomColor: Brand.divider,
+  },
+  textInput: {
+    flex: 1,
+    color: Brand.textDark,
+    fontSize: 16,
+    paddingVertical: Spacing.two,
+  },
+  addIconBtn: {
+    paddingHorizontal: Spacing.two,
+  },
+  warningCard: {
+    flexDirection: "row",
+    backgroundColor: "#F4F6F9",
+    borderLeftWidth: 4,
+    borderLeftColor: Brand.blueDeep,
+    borderRadius: 8,
+    padding: Spacing.three,
+    marginTop: Spacing.five,
+    borderWidth: 1,
+    borderColor: Brand.cardBorder,
+  },
+  infoIconWrapper: {
+    marginRight: Spacing.two,
+    marginTop: 2,
+  },
+  warningText: {
+    flex: 1,
+    color: Brand.textDark,
+    fontSize: 13,
+    lineHeight: 18,
   },
 });

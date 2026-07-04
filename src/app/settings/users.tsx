@@ -2,15 +2,20 @@ import {
   deleteAccount,
   fetchAllAccounts,
   fetchTransactions,
+  formatRand,
   setAccountActive,
   topUpUserAccount,
-  formatRand,
 } from "@/api";
 import { Brand, Spacing } from "@/constants/theme";
+import { useAppDispatch } from "@/store";
+import { hideLoader, showLoader } from "@/store/ui-slice";
+import { MaterialDesignIcons } from "@react-native-vector-icons/material-design-icons";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
+  Linking,
   Modal,
   Pressable,
   ScrollView,
@@ -18,13 +23,8 @@ import {
   Text,
   TextInput,
   View,
-  Linking,
-  ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { MaterialDesignIcons } from "@react-native-vector-icons/material-design-icons";
-import { useAppDispatch } from "@/store";
-import { hideLoader, showLoader } from "@/store/ui-slice";
 
 function isEmail(val?: string): boolean {
   if (!val) return false;
@@ -36,10 +36,10 @@ function generateTopUpReference(): string {
   const yy = String(d.getFullYear()).slice(-2);
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
-  
+
   const rand1 = Math.floor(10000000 + Math.random() * 90000000).toString();
   const rand2 = Math.floor(10000000 + Math.random() * 90000000).toString();
-  
+
   return `${yy}${mm}${dd}SBGRPP${rand1}C${rand2}`;
 }
 
@@ -170,7 +170,7 @@ export default function UsersScreen() {
   const handleCall = (phone: string) => {
     const clean = phone.replace(/[^\d+]/g, "");
     Linking.openURL(`tel:${clean}`).catch((err) =>
-      Alert.alert("Error", "Could not open dialer: " + err.message)
+      Alert.alert("Error", "Could not open dialer: " + err.message),
     );
   };
 
@@ -182,13 +182,13 @@ export default function UsersScreen() {
       clean = clean.slice(1);
     }
     Linking.openURL(`https://wa.me/${clean}`).catch((err) =>
-      Alert.alert("Error", "Could not open WhatsApp: " + err.message)
+      Alert.alert("Error", "Could not open WhatsApp: " + err.message),
     );
   };
 
   const handleEmail = (email: string) => {
     Linking.openURL(`mailto:${email.trim()}`).catch((err) =>
-      Alert.alert("Error", "Could not open email client: " + err.message)
+      Alert.alert("Error", "Could not open email client: " + err.message),
     );
   };
 
@@ -197,21 +197,34 @@ export default function UsersScreen() {
       {/* Premium Header */}
       <View style={styles.header}>
         <Pressable style={styles.backButton} onPress={() => router.back()}>
-          <MaterialDesignIcons name="arrow-left" size={24} color={Brand.textDark} />
+          <MaterialDesignIcons
+            name="arrow-left"
+            size={24}
+            color={Brand.textDark}
+          />
         </Pressable>
         <Text style={styles.headerTitle}>User Management</Text>
-        <Pressable style={styles.refreshButton} onPress={load} disabled={isLoading}>
+        <Pressable
+          style={styles.refreshButton}
+          onPress={load}
+          disabled={isLoading}
+        >
           {isLoading ? (
             <ActivityIndicator size="small" color={Brand.blue} />
           ) : (
-            <MaterialDesignIcons name="refresh" size={22} color={Brand.textDark} />
+            <MaterialDesignIcons
+              name="refresh"
+              size={22}
+              color={Brand.textDark}
+            />
           )}
         </Pressable>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {users.map((u) => {
-          const initials = `${u.firstName?.[0] || ""}${u.lastName?.[0] || ""}`.toUpperCase();
+          const initials =
+            `${u.firstName?.[0] || ""}${u.lastName?.[0] || ""}`.toUpperCase();
           const isActive = u.active !== false;
 
           return (
@@ -225,15 +238,23 @@ export default function UsersScreen() {
                   <Text style={styles.userName}>
                     {u.firstName} {u.lastName}
                   </Text>
-                  <Text style={styles.userSubText}>
-                    Acc: {u.accountNumber}
-                  </Text>
-                  <Text style={styles.userSubText}>
-                    Phone: {u.phoneNumber}
-                  </Text>
+                  <Text style={styles.userSubText}>Acc: {u.accountNumber}</Text>
+                  <Text style={styles.userSubText}>Phone: {u.phoneNumber}</Text>
                 </View>
-                <View style={[styles.statusBadge, isActive ? styles.statusActive : styles.statusInactive]}>
-                  <Text style={[styles.statusBadgeText, isActive ? styles.statusActiveText : styles.statusInactiveText]}>
+                <View
+                  style={[
+                    styles.statusBadge,
+                    isActive ? styles.statusActive : styles.statusInactive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.statusBadgeText,
+                      isActive
+                        ? styles.statusActiveText
+                        : styles.statusInactiveText,
+                    ]}
+                  >
                     {isActive ? "Active" : "Inactive"}
                   </Text>
                 </View>
@@ -262,7 +283,11 @@ export default function UsersScreen() {
                   style={[styles.cardActionBtn, styles.btnTopUp]}
                   onPress={() => handleLoadAccount(u)}
                 >
-                  <MaterialDesignIcons name="cash-plus" size={16} color={Brand.white} />
+                  <MaterialDesignIcons
+                    name="cash-plus"
+                    size={16}
+                    color={Brand.white}
+                  />
                   <Text style={styles.cardActionBtnText}>Top Up</Text>
                 </Pressable>
 
@@ -270,16 +295,28 @@ export default function UsersScreen() {
                   style={[styles.cardActionBtn, styles.btnTxs]}
                   onPress={() => handleShowTransactions(u.phoneNumber)}
                 >
-                  <MaterialDesignIcons name="history" size={16} color={Brand.white} />
+                  <MaterialDesignIcons
+                    name="history"
+                    size={16}
+                    color={Brand.white}
+                  />
                   <Text style={styles.cardActionBtnText}>Txs</Text>
                 </Pressable>
 
                 <Pressable
-                  style={[styles.cardActionBtn, styles.btnStatus, { backgroundColor: isActive ? "#F5732B" : Brand.green }]}
+                  style={[
+                    styles.cardActionBtn,
+                    styles.btnStatus,
+                    { backgroundColor: isActive ? "#F5732B" : Brand.green },
+                  ]}
                   onPress={() => handleToggleActive(u.phoneNumber, u.active)}
                 >
                   <MaterialDesignIcons
-                    name={isActive ? "account-cancel-outline" : "account-check-outline"}
+                    name={
+                      isActive
+                        ? "account-cancel-outline"
+                        : "account-check-outline"
+                    }
                     size={16}
                     color={Brand.white}
                   />
@@ -292,7 +329,11 @@ export default function UsersScreen() {
                   style={styles.btnDelete}
                   onPress={() => handleDelete(u.phoneNumber)}
                 >
-                  <MaterialDesignIcons name="delete-outline" size={20} color="#D32F2F" />
+                  <MaterialDesignIcons
+                    name="delete-outline"
+                    size={20}
+                    color="#D32F2F"
+                  />
                 </Pressable>
               </View>
             </View>
@@ -315,7 +356,11 @@ export default function UsersScreen() {
                 onPress={() => setTxModalOpen(false)}
                 hitSlop={8}
               >
-                <MaterialDesignIcons name="arrow-left" size={22} color={Brand.textDark} />
+                <MaterialDesignIcons
+                  name="arrow-left"
+                  size={22}
+                  color={Brand.textDark}
+                />
               </Pressable>
               <View style={{ flex: 1 }}>
                 <Text style={styles.modalTitle}>Transactions</Text>
@@ -323,11 +368,20 @@ export default function UsersScreen() {
               </View>
             </View>
 
-            <ScrollView style={styles.txScrollView} contentContainerStyle={{ paddingBottom: Spacing.four }}>
+            <ScrollView
+              style={styles.txScrollView}
+              contentContainerStyle={{ paddingBottom: Spacing.four }}
+            >
               {txs.length === 0 ? (
                 <View style={styles.emptyState}>
-                  <MaterialDesignIcons name="history" size={48} color={Brand.textMuted} />
-                  <Text style={styles.emptyText}>No transactions found for this user.</Text>
+                  <MaterialDesignIcons
+                    name="history"
+                    size={48}
+                    color={Brand.textMuted}
+                  />
+                  <Text style={styles.emptyText}>
+                    No transactions found for this user.
+                  </Text>
                 </View>
               ) : (
                 txs.map((t, i) => {
@@ -337,7 +391,12 @@ export default function UsersScreen() {
                   return (
                     <View key={i} style={styles.txCard}>
                       <View style={styles.txMainRow}>
-                        <View style={[styles.txIconContainer, isCredit ? styles.txIconCredit : styles.txIconDebit]}>
+                        <View
+                          style={[
+                            styles.txIconContainer,
+                            isCredit ? styles.txIconCredit : styles.txIconDebit,
+                          ]}
+                        >
                           <MaterialDesignIcons
                             name={isCredit ? "plus" : "minus"}
                             size={18}
@@ -350,11 +409,12 @@ export default function UsersScreen() {
                           <Text style={styles.txDateText}>
                             {t.date} {t.time ?? ""}
                           </Text>
-{(t.notificationValue || t.proofContact) && (
-                             <Text style={styles.txNotifValue} numberOfLines={1}>
-                               {t.notificationType === "email" ? "📧" : "📱"} {t.notificationValue || t.proofContact}
-                             </Text>
-                           )}
+                          {(t.notificationValue || t.proofContact) && (
+                            <Text style={styles.txNotifValue} numberOfLines={1}>
+                              {t.notificationType === "email" ? "📧" : "📱"}{" "}
+                              {t.notificationValue || t.proofContact}
+                            </Text>
+                          )}
                         </View>
                         <View style={styles.txAmountCol}>
                           <Text
@@ -363,7 +423,8 @@ export default function UsersScreen() {
                               isCredit ? styles.creditAmt : styles.debitAmt,
                             ]}
                           >
-                            {isCredit ? "+" : ""}{t.amount}
+                            {isCredit ? "+" : ""}
+                            {t.amount}
                           </Text>
                           {t.runningBalance && (
                             <Text style={styles.txRunningBal}>
@@ -386,7 +447,9 @@ export default function UsersScreen() {
                               Proof of Payment recipient:
                             </Text>
                           </View>
-                          <Text style={styles.notificationValueText}>{contactVal}</Text>
+                          <Text style={styles.notificationValueText}>
+                            {contactVal}
+                          </Text>
 
                           <View style={styles.notificationButtonRow}>
                             {isEmail(contactVal) ? (
@@ -394,8 +457,19 @@ export default function UsersScreen() {
                                 style={[styles.miniActionBtn, styles.emailBtn]}
                                 onPress={() => handleEmail(contactVal)}
                               >
-                                <MaterialDesignIcons name="email-outline" size={14} color="#0D47A1" />
-                                <Text style={[styles.miniActionText, { color: "#0D47A1" }]}>Email Receiver</Text>
+                                <MaterialDesignIcons
+                                  name="email-outline"
+                                  size={14}
+                                  color="#0D47A1"
+                                />
+                                <Text
+                                  style={[
+                                    styles.miniActionText,
+                                    { color: "#0D47A1" },
+                                  ]}
+                                >
+                                  Email Receiver
+                                </Text>
                               </Pressable>
                             ) : (
                               <>
@@ -403,15 +477,40 @@ export default function UsersScreen() {
                                   style={[styles.miniActionBtn, styles.callBtn]}
                                   onPress={() => handleCall(contactVal)}
                                 >
-                                  <MaterialDesignIcons name="phone-outline" size={14} color="#0D47A1" />
-                                  <Text style={[styles.miniActionText, { color: "#0D47A1" }]}>Call</Text>
+                                  <MaterialDesignIcons
+                                    name="phone-outline"
+                                    size={14}
+                                    color="#0D47A1"
+                                  />
+                                  <Text
+                                    style={[
+                                      styles.miniActionText,
+                                      { color: "#0D47A1" },
+                                    ]}
+                                  >
+                                    Call
+                                  </Text>
                                 </Pressable>
                                 <Pressable
-                                  style={[styles.miniActionBtn, styles.whatsappBtn]}
+                                  style={[
+                                    styles.miniActionBtn,
+                                    styles.whatsappBtn,
+                                  ]}
                                   onPress={() => handleWhatsApp(contactVal)}
                                 >
-                                  <MaterialDesignIcons name="whatsapp" size={14} color="#1B5E20" />
-                                  <Text style={[styles.miniActionText, { color: "#1B5E20" }]}>WhatsApp</Text>
+                                  <MaterialDesignIcons
+                                    name="whatsapp"
+                                    size={14}
+                                    color="#1B5E20"
+                                  />
+                                  <Text
+                                    style={[
+                                      styles.miniActionText,
+                                      { color: "#1B5E20" },
+                                    ]}
+                                  >
+                                    WhatsApp
+                                  </Text>
                                 </Pressable>
                               </>
                             )}
@@ -934,4 +1033,3 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
 });
-
