@@ -1,5 +1,6 @@
 import Ionicons from "@react-native-vector-icons/ionicons";
 import { Asset } from "expo-asset";
+import { cacheDirectory, copyAsync } from "expo-file-system/legacy";
 import * as Print from "expo-print";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Sharing from "expo-sharing";
@@ -13,7 +14,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  View
+  View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -112,7 +113,7 @@ export function buildProofOfPaymentHtml(args: {
 <style>
   @page { margin: 0; size: A4; }
   * { box-sizing: border-box; }
-  body { font-family: Arial, Helvetica, sans-serif; color: #1d2533; margin: 0; background: #fff; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #000000ff; margin: 0; background: #fff; }
   .page { padding: 40px 48px 36px; position: relative; min-height: 100vh; }
   .top-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 36px; }
   .brand-block { display: flex; align-items: center; gap: 12px; }
@@ -120,12 +121,12 @@ export function buildProofOfPaymentHtml(args: {
   .brand-name { font-size: 28px; font-weight: 700; color: #003ccd; margin: 0; }
   .address { text-align: right; font-size: 11px; line-height: 1.5; color: #333; max-width: 320px; }
   .content { padding-top: 8px; padding-bottom: 140px; }
-  h1 { font-size: 20px; margin: 0 0 18px; color: #1d2533; }
-  p { margin: 0 0 16px; line-height: 1.6; font-size: 13px; color: #303640; }
+  h1 { font-size: 20px; margin: 0 0 18px; color: #000000ff; }
+  p { margin: 0 0 8px; line-height: 1.6; font-size: 13px; color: #000; }
   .field-list { margin: 14px 0 0; padding: 0; }
-  .row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; }
+  .row { display: flex; justify-content: space-between; padding: 3px 0; font-size: 13px; }
   .row-label { color: #000; width: 45%; font-weight: 700; }
-  .row-value { color: #1d2533; font-weight: 400; text-align: left; width: 50%; }
+  .row-value { color: #000; font-weight: 500; text-align: left; width: 50%; }
   .group { margin-top: 24px; }
   .group strong { font-weight: 700; }
   .signature { margin-top: 30px; }
@@ -161,7 +162,7 @@ export function buildProofOfPaymentHtml(args: {
       <div class="field-list">
         ${row("Reference number", reference)}
         ${row("Beneficiary name", tx.beneficiaryName ?? tx.title ?? "—")}
-        ${row("Bank name", tx.sub ?? "—")}
+        ${row("Bank name", tx.bankName ?? "FIRST NATIONAL BANK")}
         ${row("Beneficiary account number", maskAccountNumber(tx.account ?? "—"))}
         ${row("Beneficiary branch number", tx.branchCode ?? "—")}
         ${row("Beneficiary reference", tx.theirRef ?? tx.title ?? "—")}
@@ -176,8 +177,8 @@ export function buildProofOfPaymentHtml(args: {
 
       <div class="group">
         <div>Immediate payments may take a few hours.</div>
-        <div style="margin-top: 8px;">Non-immediate payments to Standard Bank accounts may take up to 24 hours.</div>
-        <div style="margin-top: 8px;">Non-immediate payments to other banks may take up to three business days.</div>
+        <div style="margin-top: 5px;">Non-immediate payments to Standard Bank accounts may take up to 24 hours.</div>
+        <div style="margin-top: 5px;">Non-immediate payments to other banks may take up to three business days.</div>
       </div>
 
       <div class="group">
@@ -191,7 +192,7 @@ export function buildProofOfPaymentHtml(args: {
     </div>
 
     <div class="footer">
-      The Standard Bank of South Africa Limited (Reg. No. 1962/000738/06) Authorised financial services provider and registered credit provider (NCRCP15).
+      <b>The Standard Bank of South Africa Limited (Reg. No. 1962/000738/06) Authorised financial services provider and registered credit provider (NCRCP15).</b>
       <br />
       Directors: N Nyembezi (Chairman) DWP Hodnett* (Chief Executive Officer) LL Bam HJ Berrange PLH Cook A Daehnke* OA David-Borah* GJ Fraser-Moleketi GMB Keneally BJ Kruger Li Li2 JH Maree NNA Matyumza RN Ogega5 Fenglil TanZ SK Tshabalala*.
       <br />
@@ -229,9 +230,8 @@ export default function TransactionDetailsScreen() {
 
   const amountNum = parseFloat(tx.amount ?? "0");
   const isCredit = !!tx.credit;
-  const sign = isCredit ? "" : amountNum < 0 ? "-" : "";
   const absAmount = Math.abs(amountNum).toFixed(2);
-  const amountText = `${sign}R${absAmount}`;
+  const amountText = `R${absAmount}`;
   const hasProofOfPayment = !isCredit && !!tx.beneficiaryName;
 
   const holder = useAppSelector((s) => s.accountInfo);
@@ -292,14 +292,19 @@ export default function TransactionDetailsScreen() {
     setMenuOpen(false);
     try {
       const { uri } = await createProofPdfUri();
+      const newPath = `${cacheDirectory}PaymentConfirmation.pdf`;
+      await copyAsync({
+        from: uri,
+        to: newPath,
+      });
       if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(uri, {
+        await Sharing.shareAsync(newPath, {
           mimeType: "application/pdf",
           dialogTitle: "Proof of payment",
           UTI: "com.adobe.pdf",
         });
       } else {
-        Alert.alert("Saved", `Proof of payment created at:\n${uri}`);
+        Alert.alert("Saved", `Proof of payment created at:\n${newPath}`);
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

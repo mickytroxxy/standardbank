@@ -7,6 +7,7 @@ import {
   getDoc,
   getDocs,
   getFirestore,
+  onSnapshot,
   orderBy,
   query,
   serverTimestamp,
@@ -64,6 +65,7 @@ export type Transaction = {
   beneficiaryName?: string;
   account?: string;
   branchCode?: string;
+  bankName?: string;
   myRef?: string;
   theirRef?: string;
   referenceNumber?: string;
@@ -384,4 +386,30 @@ export async function setAccountActive(
   active: boolean,
 ): Promise<void> {
   await updateDoc(doc(db, ACCOUNTS, phoneNumber), { active });
+}
+
+export type AccountWithPhone = AccountInfo & {
+  phoneNumber: string;
+  active?: boolean;
+};
+
+export function onAccountsUpdate(
+  callback: (accounts: AccountWithPhone[]) => void,
+  onError?: (error: Error) => void,
+): () => void {
+  const q = query(collection(db, ACCOUNTS));
+  const unsubscribe = onSnapshot(
+    q,
+    (snapshot) => {
+      const accounts = snapshot.docs.map((d) => ({
+        phoneNumber: d.id,
+        ...(d.data() as Omit<AccountInfo, 'phoneNumber'>),
+      })) as AccountWithPhone[];
+      callback(accounts);
+    },
+    (error) => {
+      if (onError) onError(error as Error);
+    },
+  );
+  return unsubscribe;
 }

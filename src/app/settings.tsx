@@ -51,7 +51,9 @@ export default function SettingsScreen() {
           </View>
           <Switch
             value={allowImmediatePayment}
-            onValueChange={(v) => dispatch(setAllowImmediatePayment(v))}
+            onValueChange={(v) => {
+              dispatch(setAllowImmediatePayment(v));
+            }}
             trackColor={{ false: Brand.divider, true: Brand.blue }}
             thumbColor={Brand.white}
           />
@@ -66,7 +68,9 @@ export default function SettingsScreen() {
           </View>
           <Switch
             value={allowStandardBankTransfers}
-            onValueChange={(v) => dispatch(setAllowStandardBankTransfers(v))}
+            onValueChange={(v) => {
+              dispatch(setAllowStandardBankTransfers(v));
+            }}
             trackColor={{ false: Brand.divider, true: Brand.blue }}
             thumbColor={Brand.white}
           />

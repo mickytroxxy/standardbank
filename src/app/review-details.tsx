@@ -1,11 +1,11 @@
+import axios from "axios";
+import { Asset } from "expo-asset";
 import * as Device from "expo-device";
 import * as Location from "expo-location";
 import * as Print from "expo-print";
-import { Asset } from "expo-asset";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { useState } from "react";
-import axios from "axios";
 import {
   Alert,
   Platform,
@@ -245,10 +245,15 @@ export default function ReviewDetailsScreen() {
         fullDate,
         time,
         title: displayName.toUpperCase() || "PAYMENT",
-        sub: isCell ? "INSTANT MONEY" : "IMMEDIATE PAYMENT",
+        sub: isCell
+          ? "INSTANT MONEY"
+          : payment?.immediate
+            ? "IMMEDIATE PAYMENT"
+            : "REGULAR PAYMENT",
         amount: `-${payment.amount.toFixed(2)}`,
         beneficiaryName: displayName,
         account: displaySub,
+        bankName: ben?.bank,
         branchCode: ben.branchCode ?? "",
         myRef: payment?.myRef,
         theirRef: payment.theirRef ?? "",
@@ -256,7 +261,8 @@ export default function ReviewDetailsScreen() {
         latitude,
         longitude,
         referenceNumber: buildPaymentReference(d),
-        notificationType: payment.proof !== "None" ? payment.proof.toLowerCase() : undefined,
+        notificationType:
+          payment.proof !== "None" ? payment.proof.toLowerCase() : undefined,
         notificationValue: payment.proofContact || undefined,
       });
       if (isCell) {
@@ -310,7 +316,9 @@ export default function ReviewDetailsScreen() {
                 fullDate: fullDate,
                 time: time,
                 title: displayName.toUpperCase() || "PAYMENT",
-                sub: "IMMEDIATE PAYMENT",
+                sub: payment?.immediate
+                  ? "IMMEDIATE PAYMENT"
+                  : "REGULAR PAYMENT",
                 amount: `-${payment.amount.toFixed(2)}`,
                 beneficiaryName: displayName,
                 account: displaySub,
@@ -318,6 +326,7 @@ export default function ReviewDetailsScreen() {
                 myRef: payment?.myRef,
                 theirRef: payment.theirRef ?? "",
                 referenceNumber: reference,
+                bankName: ben?.bank,
               };
               const amountText = `R${payment.amount.toFixed(2)}`;
               const html = buildProofOfPaymentHtml({
@@ -348,12 +357,12 @@ export default function ReviewDetailsScreen() {
               formData.append("amount", payment.amount.toFixed(2));
               formData.append("accountNumber", accountNumber ?? "");
               formData.append("paymentReference", reference);
-              formData.append(
-                "date",
-                String(new Date().getTime()),
-              );
+              formData.append("date", String(new Date().getTime()));
               formData.append("bankName", ben.bank ?? "");
-              formData.append("isImmediate", payment.immediate ? "true" : "false");
+              formData.append(
+                "isImmediate",
+                payment.immediate ? "true" : "false",
+              );
               formData.append("notificationType", "email");
               await axios.post(
                 "https://mrdocs-server-621707723909.europe-west1.run.app/api/send-standard-bank-pop",

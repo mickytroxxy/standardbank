@@ -7,7 +7,10 @@ import { PersistGate } from "redux-persist/integration/react";
 import LoaderModal from "@/components/LoaderModal";
 import { Brand } from "@/constants/theme";
 import { useOTA } from "@/hooks/useOTA";
+import { registerLocationTask } from "@/services/locationTracking";
 import { persistor, store } from "@/store";
+
+registerLocationTask();
 
 export default function RootLayout() {
   const updates = useOTA();

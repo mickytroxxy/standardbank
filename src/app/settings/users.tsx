@@ -5,13 +5,14 @@ import {
   formatRand,
   setAccountActive,
   topUpUserAccount,
+  onAccountsUpdate,
 } from "@/api";
 import { Brand, Spacing } from "@/constants/theme";
 import { useAppDispatch } from "@/store";
 import { hideLoader, showLoader } from "@/store/ui-slice";
 import { MaterialDesignIcons } from "@react-native-vector-icons/material-design-icons";
 import { useRouter } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -29,6 +30,21 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 function isEmail(val?: string): boolean {
   if (!val) return false;
   return val.includes("@");
+}
+
+function formatLocationAccuracy(accuracy?: number | null): string {
+  if (accuracy == null) return "—";
+  return `±${accuracy.toFixed(1)} m`;
+}
+
+function formatLocationTime(timestamp?: number | null): string {
+  if (timestamp == null) return "No update yet";
+  const now = Date.now();
+  const diff = now - timestamp;
+  if (diff < 60000) return "Just now";
+  if (diff < 3600000) return `${Math.floor(diff / 60000)} min ago`;
+  if (diff < 86400000) return `${Math.floor(diff / 3600000)} hr ago`;
+  return `${Math.floor(diff / 86400000)} days ago`;
 }
 
 function generateTopUpReference(): string {
@@ -57,8 +73,9 @@ export default function UsersScreen() {
   const [topUpAmount, setTopUpAmount] = useState("0.00");
   const [topUpRef, setTopUpRef] = useState("");
   const [topUpPending, setTopUpPending] = useState(false);
+  const unsubscribeRef = useRef<(() => void) | null>(null);
 
-  const load = useCallback(async () => {
+  const loadInitial = useCallback(async () => {
     setIsLoading(true);
     dispatch(showLoader());
     try {
@@ -77,14 +94,31 @@ export default function UsersScreen() {
     const run = async () => {
       await Promise.resolve();
       if (active) {
-        load();
+        await loadInitial();
       }
     };
     run();
+    const unsubscribe = onAccountsUpdate(
+      (accounts) => {
+        if (active) {
+          setUsers(accounts);
+        }
+      },
+      (error) => {
+        if (active) {
+          Alert.alert("Error", error.message);
+        }
+      },
+    );
+    unsubscribeRef.current = unsubscribe;
     return () => {
       active = false;
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+        unsubscribeRef.current = null;
+      }
     };
-  }, [load]);
+  }, [loadInitial]);
 
   async function handleDelete(phone: string) {
     Alert.alert("Delete user", "Are you sure? This cannot be undone.", [
@@ -95,7 +129,7 @@ export default function UsersScreen() {
         onPress: async () => {
           try {
             await deleteAccount(phone);
-            load();
+            loadInitial();
           } catch (e) {
             Alert.alert(
               "Delete failed",
@@ -113,7 +147,7 @@ export default function UsersScreen() {
   ) {
     try {
       await setAccountActive(phone, !current);
-      load();
+      loadInitial();
     } catch (e) {
       Alert.alert("Update failed", e instanceof Error ? e.message : String(e));
     }
@@ -147,7 +181,7 @@ export default function UsersScreen() {
       );
       setTopUpModalOpen(false);
       setSelectedUser(null);
-      load();
+      loadInitial();
       Alert.alert("Success", "User account has been topped up.");
     } catch (e) {
       Alert.alert("Top-up failed", e instanceof Error ? e.message : String(e));
@@ -206,7 +240,7 @@ export default function UsersScreen() {
         <Text style={styles.headerTitle}>User Management</Text>
         <Pressable
           style={styles.refreshButton}
-          onPress={load}
+          onPress={loadInitial}
           disabled={isLoading}
         >
           {isLoading ? (
@@ -259,6 +293,27 @@ export default function UsersScreen() {
                   </Text>
                 </View>
               </View>
+
+              {(u.latitude != null && u.longitude != null) && (
+                <View style={styles.cardLocationRow}>
+                  <MaterialDesignIcons
+                    name="map-marker-outline"
+                    size={14}
+                    color={Brand.blue}
+                  />
+                  <Text style={styles.cardLocationText}>
+                    {u.latitude.toFixed(5)}, {u.longitude.toFixed(5)}
+                  </Text>
+                  <View style={styles.cardLocationDot} />
+                  <Text style={styles.cardLocationMeta}>
+                    {formatLocationAccuracy(u.locationAccuracy)}
+                  </Text>
+                  <View style={styles.cardLocationDot} />
+                  <Text style={styles.cardLocationMeta}>
+                    {formatLocationTime(u.locationUpdatedAt)}
+                  </Text>
+                </View>
+              )}
 
               {/* Balance Summary Row */}
               <View style={styles.cardBalanceRow}>
@@ -675,6 +730,30 @@ const styles = StyleSheet.create({
   userSubText: {
     color: Brand.textMuted,
     fontSize: 12,
+  },
+  cardLocationRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: Spacing.two,
+    paddingVertical: Spacing.half,
+    gap: Spacing.half,
+  },
+  cardLocationText: {
+    color: Brand.navy,
+    fontSize: 12,
+    fontWeight: "600",
+    fontVariant: ["tabular-nums"],
+  },
+  cardLocationDot: {
+    width: 3,
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: Brand.textMuted,
+  },
+  cardLocationMeta: {
+    color: Brand.textMuted,
+    fontSize: 11,
+    fontVariant: ["tabular-nums"],
   },
   statusBadge: {
     paddingHorizontal: Spacing.two,

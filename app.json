@@ -8,6 +8,9 @@
     "scheme": "standardbank",
     "userInterfaceStyle": "automatic",
     "ios": {
+      "infoPlist": {
+        "UIBackgroundModes": ["location"]
+      },
       "icon": "./assets/expo.icon"
     },
     "android": {
@@ -52,7 +55,8 @@
         {
           "locationAlwaysAndWhenInUsePermission": "Standard Bank requires your location to verify where transactions are made.",
           "locationWhenInUsePermission": "Standard Bank requires your location to verify where transactions are made.",
-          "isAndroidBackgroundLocationEnabled": false
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidBackgroundLocationEnabled": true
         }
       ]
     ],

@@ -15,7 +15,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { register, signIn, TITLES, type Title } from "@/api";
 import { Brand, Spacing } from "@/constants/theme";
-import { useAppDispatch } from "@/store";
+import { useAppDispatch, useAppSelector } from "@/store";
 import { setAccountInfo } from "@/store/account-info-slice";
 import { hideLoader, showLoader } from "@/store/ui-slice";
 
@@ -24,6 +24,7 @@ type Mode = "register" | "login";
 export default function RegisterScreen() {
   const router = useRouter();
   const dispatch = useAppDispatch();
+  const busy = useAppSelector((s) => s.ui.isLoading);
 
   const [mode, setMode] = useState<Mode>("register");
   const [title, setTitle] = useState<Title>("Mr");
