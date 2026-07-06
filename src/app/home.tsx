@@ -7,11 +7,9 @@ import { formatRand } from "@/api";
 import { BottomNav } from "@/components/bottom-nav";
 import { Brand, Spacing } from "@/constants/theme";
 import { useAppSelector } from "@/store";
-import { startLocationTracking } from "@/services/locationTracking";
 import Ionicons from "@react-native-vector-icons/ionicons";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
-import { useEffect } from "react";
 
 type TopItem = {
   label: string;
@@ -37,16 +35,15 @@ const CHIPS = ["Credit", "Evolve", "Debit", "Prepaid"];
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { accountNumber, availableBalance, latestBalance, phoneNumber } = useAppSelector(
-    (s) => s.accountInfo,
-  );
+  const { accountNumber, availableBalance, latestBalance, phoneNumber } =
+    useAppSelector((s) => s.accountInfo);
 
-  useEffect(() => {
-    if (!phoneNumber) return;
-    startLocationTracking(phoneNumber).catch((e) =>
-      console.warn("Location tracking failed:", e),
-    );
-  }, [phoneNumber]);
+  // useEffect(() => {
+  //   if (!phoneNumber) return;
+  //   startLocationTracking(phoneNumber).catch((e) =>
+  //     console.warn("Location tracking failed:", e),
+  //   );
+  // }, [phoneNumber]);
 
   return (
     <LinearGradient
