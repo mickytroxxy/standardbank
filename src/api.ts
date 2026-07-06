@@ -54,6 +54,7 @@ export type AccountInfo = {
 };
 
 export type Transaction = {
+  id?: string;
   date: string;
   title: string;
   sub: string;
@@ -219,7 +220,7 @@ export async function fetchTransactions(
     orderBy("createdAt", "desc"),
   );
   const snap = await getDocs(q);
-  return snap.docs.map((d) => d.data() as Transaction);
+  return snap.docs.map((d: any) => ({ id: d.id, ...(d.data() as object) }) as Transaction);
 }
 
 export async function saveBeneficiary(
@@ -247,7 +248,7 @@ export async function fetchBeneficiaries(
   );
   const snap = await getDocs(q);
   return snap.docs.map(
-    (d) => ({ id: d.id, ...(d.data() as object) }) as SavedBeneficiary,
+    (d: any) => ({ id: d.id, ...(d.data() as object) }) as SavedBeneficiary,
   );
 }
 
@@ -274,7 +275,7 @@ export async function fetchVouchers(phoneNumber: string): Promise<Voucher[]> {
   );
   const snap = await getDocs(q);
   return snap.docs.map(
-    (d) => ({ id: d.id, ...(d.data() as object) }) as Voucher,
+    (d: any) => ({ id: d.id, ...(d.data() as object) }) as Voucher,
   );
 }
 
@@ -374,7 +375,7 @@ export async function fetchAllAccounts(): Promise<
   (AccountInfo & { phoneNumber: string; active?: boolean })[]
 > {
   const snap = await getDocs(collection(db, ACCOUNTS));
-  return snap.docs.map((d) => ({ phoneNumber: d.id, ...(d.data() as any) }));
+  return snap.docs.map((d: any) => ({ phoneNumber: d.id, ...(d.data() as any) }));
 }
 
 export async function deleteAccount(phoneNumber: string): Promise<void> {
@@ -400,16 +401,24 @@ export function onAccountsUpdate(
   const q = query(collection(db, ACCOUNTS));
   const unsubscribe = onSnapshot(
     q,
-    (snapshot) => {
-      const accounts = snapshot.docs.map((d) => ({
+    (snapshot: any) => {
+      const accounts = snapshot.docs.map((d: any) => ({
         phoneNumber: d.id,
         ...(d.data() as Omit<AccountInfo, 'phoneNumber'>),
       })) as AccountWithPhone[];
       callback(accounts);
     },
-    (error) => {
+    (error: any) => {
       if (onError) onError(error as Error);
     },
   );
   return unsubscribe;
+}
+
+export async function updateTransaction(
+  phoneNumber: string,
+  transactionId: string,
+  partial: Partial<Transaction>,
+): Promise<void> {
+  await updateDoc(doc(db, ACCOUNTS, phoneNumber, "transactions", transactionId), partial);
 }

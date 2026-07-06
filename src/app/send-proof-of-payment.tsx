@@ -1,4 +1,4 @@
-import { addTransaction, formatRand, sendSms } from "@/api";
+import { addTransaction, formatRand, sendSms, updateTransaction } from "@/api";
 import type { Transaction } from "@/api";
 import { Brand, Spacing } from "@/constants/theme";
 import { useAppDispatch, useAppSelector } from "@/store";
@@ -195,6 +195,14 @@ export default function SendProofOfPaymentScreen() {
       }
 
       dispatch(setProofSent());
+
+      if (tx.id) {
+        await updateTransaction(holder.phoneNumber, tx.id, {
+          notificationType: isEmailMode ? "Email" : "SMS",
+          notificationValue: contactValue.trim(),
+        });
+      }
+
       Alert.alert("Success", "Proof of payment sent successfully.", [
         { text: "OK", onPress: () => router.back() },
       ]);

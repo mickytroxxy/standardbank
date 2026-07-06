@@ -2,15 +2,15 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { useRef, useState } from "react";
 import {
-    KeyboardAvoidingView,
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Switch,
-    Text,
-    TextInput,
-    View,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -179,6 +179,7 @@ export default function PaymentDetailsScreen() {
         <ScrollView
           contentContainerStyle={{ paddingBottom: Spacing.six }}
           keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
           onScrollBeginDrag={() => proofOpen && setProofOpen(false)}
         >
           <View style={styles.fromBlock}>
@@ -601,19 +602,16 @@ const styles = StyleSheet.create({
   },
   dropdownValue: { flex: 1, fontSize: 17, color: Brand.textDark },
   dropdownMenu: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    top: 48,
     backgroundColor: Brand.white,
+    borderWidth: 1,
+    borderColor: Brand.divider,
     borderRadius: 4,
-    paddingVertical: Spacing.one,
-    elevation: 6,
+    marginTop: 4,
+    elevation: 3,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.18,
-    shadowRadius: 6,
-    zIndex: 10,
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   dropdownItem: {
     paddingHorizontal: Spacing.three,
