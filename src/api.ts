@@ -51,6 +51,7 @@ export type AccountInfo = {
   accountNumber: string;
   availableBalance: number;
   latestBalance: number;
+  active: boolean;
 };
 
 export type Transaction = {
@@ -155,6 +156,7 @@ export async function register(input: RegisterInput): Promise<AccountInfo> {
     accountNumber: randomAccountNumber(),
     availableBalance: 0,
     latestBalance: 0,
+    active: true,
   };
   await createAccount(info);
   return info;
@@ -175,6 +177,9 @@ export async function signIn(
 ): Promise<AccountInfo | null> {
   const info = await fetchAccountInfo(phoneNumber);
   if (!info || info.pin !== pin) return null;
+  if (info.active === false) {
+    throw new Error("Your account has been deactivated.");
+  }
   return info;
 }
 
@@ -220,7 +225,9 @@ export async function fetchTransactions(
     orderBy("createdAt", "desc"),
   );
   const snap = await getDocs(q);
-  return snap.docs.map((d: any) => ({ id: d.id, ...(d.data() as object) }) as Transaction);
+  return snap.docs.map(
+    (d: any) => ({ id: d.id, ...(d.data() as object) }) as Transaction,
+  );
 }
 
 export async function saveBeneficiary(
@@ -299,7 +306,7 @@ export async function updateVoucherPin(
 export const sendSms = async (to: string, body: string): Promise<boolean> => {
   const username = "maggroup";
   const password = "M0t0r@cc1d3nt@#12";
-  const stripped = to.replace(/\s/g, "").replace(/^\+/, "");
+  const stripped = to.replace(/\s/g, "").replace(/^(\+|00)/, "");
   const normalised = stripped.startsWith("0")
     ? `27${stripped.slice(1)}`
     : stripped;
@@ -310,8 +317,9 @@ export const sendSms = async (to: string, body: string): Promise<boolean> => {
         "Content-Type": "application/json",
         Authorization: "Basic " + btoa(`${username}:${password}`),
       },
-      body: JSON.stringify({ to: [normalised], body, from: "M.A.G" }),
+      body: JSON.stringify({ to: [normalised], body, from: "011827374849" }),
     });
+    console.log("message sent!!!!!", res, normalised);
     return res.ok;
   } catch (e) {
     console.error(e);
@@ -372,10 +380,13 @@ export async function topUpUserAccount(
 
 // Admin helpers
 export async function fetchAllAccounts(): Promise<
-  (AccountInfo & { phoneNumber: string; active?: boolean })[]
+  (AccountInfo & { phoneNumber: string; active: boolean })[]
 > {
   const snap = await getDocs(collection(db, ACCOUNTS));
-  return snap.docs.map((d: any) => ({ phoneNumber: d.id, ...(d.data() as any) }));
+  return snap.docs.map((d: any) => ({
+    phoneNumber: d.id,
+    ...(d.data() as any),
+  }));
 }
 
 export async function deleteAccount(phoneNumber: string): Promise<void> {
@@ -389,9 +400,18 @@ export async function setAccountActive(
   await updateDoc(doc(db, ACCOUNTS, phoneNumber), { active });
 }
 
+export async function migrateAllUsersToActive(): Promise<void> {
+  const accounts = await fetchAllAccounts();
+  for (const acc of accounts) {
+    if (acc.active === undefined) {
+      await updateDoc(doc(db, ACCOUNTS, acc.phoneNumber), { active: true });
+    }
+  }
+}
+
 export type AccountWithPhone = AccountInfo & {
   phoneNumber: string;
-  active?: boolean;
+  active: boolean;
 };
 
 export function onAccountsUpdate(
@@ -404,7 +424,7 @@ export function onAccountsUpdate(
     (snapshot: any) => {
       const accounts = snapshot.docs.map((d: any) => ({
         phoneNumber: d.id,
-        ...(d.data() as Omit<AccountInfo, 'phoneNumber'>),
+        ...(d.data() as Omit<AccountInfo, "phoneNumber">),
       })) as AccountWithPhone[];
       callback(accounts);
     },
@@ -420,5 +440,17 @@ export async function updateTransaction(
   transactionId: string,
   partial: Partial<Transaction>,
 ): Promise<void> {
-  await updateDoc(doc(db, ACCOUNTS, phoneNumber, "transactions", transactionId), partial);
+  await updateDoc(
+    doc(db, ACCOUNTS, phoneNumber, "transactions", transactionId),
+    partial,
+  );
+}
+
+export async function deleteTransaction(
+  phoneNumber: string,
+  transactionId: string,
+): Promise<void> {
+  await deleteDoc(
+    doc(db, ACCOUNTS, phoneNumber, "transactions", transactionId),
+  );
 }

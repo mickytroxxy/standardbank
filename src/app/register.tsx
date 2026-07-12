@@ -2,7 +2,6 @@ import { MaterialDesignIcons } from "@react-native-vector-icons/material-design-
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
-    KeyboardAvoidingView,
     Platform,
     Pressable,
     ScrollView,
@@ -11,6 +10,7 @@ import {
     TextInput,
     View,
 } from "react-native";
+import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { register, signIn, TITLES, type Title } from "@/api";

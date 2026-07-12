@@ -1,5 +1,5 @@
-import { addTransaction, formatRand, sendSms, updateTransaction } from "@/api";
 import type { Transaction } from "@/api";
+import { sendSms, updateTransaction } from "@/api";
 import { Brand, Spacing } from "@/constants/theme";
 import { useAppDispatch, useAppSelector } from "@/store";
 import { setProofSent } from "@/store/ui-slice";
@@ -8,12 +8,10 @@ import axios from "axios";
 import { Asset } from "expo-asset";
 import * as Print from "expo-print";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { SymbolView } from "expo-symbols";
 import { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
@@ -22,6 +20,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { KeyboardAvoidingView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { buildProofOfPaymentHtml } from "./transaction-details";
 
@@ -197,7 +196,7 @@ export default function SendProofOfPaymentScreen() {
       dispatch(setProofSent());
 
       if (tx.id) {
-        await updateTransaction(holder.phoneNumber, tx.id, {
+        await updateTransaction(holder?.phoneNumber as any, tx.id, {
           notificationType: isEmailMode ? "Email" : "SMS",
           notificationValue: contactValue.trim(),
         });
@@ -219,15 +218,25 @@ export default function SendProofOfPaymentScreen() {
       {/* Header Container wraps the header and colors the status bar area blue */}
       <View style={{ backgroundColor: Brand.blue, paddingTop: insets.top }}>
         <View style={styles.header}>
-          <Pressable style={styles.backBtn} onPress={() => router.back()} hitSlop={8}>
-            <MaterialDesignIcons name="arrow-left" size={24} color={Brand.white} />
+          <Pressable
+            style={styles.backBtn}
+            onPress={() => router.back()}
+            hitSlop={8}
+          >
+            <MaterialDesignIcons
+              name="arrow-left"
+              size={24}
+              color={Brand.white}
+            />
           </Pressable>
           <Text style={styles.headerTitle}>Send Proof Of Payment</Text>
           <Pressable onPress={handleSend} disabled={!canSend || sending}>
             {sending ? (
               <ActivityIndicator size="small" color={Brand.white} />
             ) : (
-              <Text style={[styles.sendText, !canSend && { opacity: 0.6 }]}>SEND</Text>
+              <Text style={[styles.sendText, !canSend && { opacity: 0.6 }]}>
+                SEND
+              </Text>
             )}
           </Pressable>
         </View>
@@ -247,7 +256,9 @@ export default function SendProofOfPaymentScreen() {
 
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Beneficiary name</Text>
-            <Text style={styles.detailValue}>{tx.beneficiaryName ?? tx.title ?? "—"}</Text>
+            <Text style={styles.detailValue}>
+              {tx.beneficiaryName ?? tx.title ?? "—"}
+            </Text>
           </View>
 
           <View style={styles.detailRow}>
@@ -290,7 +301,11 @@ export default function SendProofOfPaymentScreen() {
               onPress={() => setMethodOpen((v) => !v)}
             >
               <Text style={styles.dropdownInputValue}>{method}</Text>
-              <MaterialDesignIcons name="menu-down" size={24} color={Brand.navy} />
+              <MaterialDesignIcons
+                name="menu-down"
+                size={24}
+                color={Brand.navy}
+              />
             </Pressable>
 
             {methodOpen && (
@@ -319,19 +334,27 @@ export default function SendProofOfPaymentScreen() {
 
           {/* Contact Input Field */}
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>{isEmailMode ? "Email" : "Cellphone number"}</Text>
+            <Text style={styles.inputLabel}>
+              {isEmailMode ? "Email" : "Cellphone number"}
+            </Text>
             <View style={styles.textInputWrapper}>
               <TextInput
                 value={contactValue}
                 onChangeText={setContactValue}
-                placeholder={isEmailMode ? "Enter recipient email" : "e.g. 082 123 4567"}
+                placeholder={
+                  isEmailMode ? "Enter recipient email" : "e.g. 082 123 4567"
+                }
                 placeholderTextColor={Brand.textMuted}
                 keyboardType={isEmailMode ? "email-address" : "phone-pad"}
                 autoCapitalize="none"
                 style={styles.textInput}
               />
               <Pressable style={styles.addIconBtn}>
-                <MaterialDesignIcons name="plus-circle-outline" size={22} color={Brand.blue} />
+                <MaterialDesignIcons
+                  name="plus-circle-outline"
+                  size={22}
+                  color={Brand.blue}
+                />
               </Pressable>
             </View>
           </View>
@@ -349,12 +372,17 @@ export default function SendProofOfPaymentScreen() {
           {/* Warning / Disclaimer Card */}
           <View style={styles.warningCard}>
             <View style={styles.infoIconWrapper}>
-              <MaterialDesignIcons name="information" size={20} color={Brand.navy} />
+              <MaterialDesignIcons
+                name="information"
+                size={20}
+                color={Brand.navy}
+              />
             </View>
             <Text style={styles.warningText}>
-              Please ensure you insert the correct recipient details before you send the proof of
-              payment. We are not responsible for any loss you may suffer as a result of you
-              entering the wrong recipient details.
+              Please ensure you insert the correct recipient details before you
+              send the proof of payment. We are not responsible for any loss you
+              may suffer as a result of you entering the wrong recipient
+              details.
             </Text>
           </View>
         </ScrollView>

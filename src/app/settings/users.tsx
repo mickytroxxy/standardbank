@@ -1,11 +1,13 @@
 import {
   deleteAccount,
+  deleteTransaction,
   fetchAllAccounts,
   fetchTransactions,
   formatRand,
+  onAccountsUpdate,
   setAccountActive,
   topUpUserAccount,
-  onAccountsUpdate,
+  updateTransaction,
 } from "@/api";
 import { Brand, Spacing } from "@/constants/theme";
 import { useAppDispatch } from "@/store";
@@ -74,6 +76,12 @@ export default function UsersScreen() {
   const [topUpRef, setTopUpRef] = useState("");
   const [topUpPending, setTopUpPending] = useState(false);
   const unsubscribeRef = useRef<(() => void) | null>(null);
+
+  const [editTxModalOpen, setEditTxModalOpen] = useState(false);
+  const [editingTx, setEditingTx] = useState<any | null>(null);
+  const [editDate, setEditDate] = useState("");
+  const [editTime, setEditTime] = useState("");
+  const [editFullDate, setEditFullDate] = useState("");
 
   const loadInitial = useCallback(async () => {
     setIsLoading(true);
@@ -201,6 +209,58 @@ export default function UsersScreen() {
     }
   }
 
+  function handleOpenEditTx(t: any) {
+    setEditingTx(t);
+    setEditDate(t.date || "");
+    setEditTime(t.time || "");
+    setEditFullDate(t.fullDate || "");
+    setEditTxModalOpen(true);
+  }
+
+  async function handleSaveEditTx() {
+    if (!txUser || !editingTx?.id) return;
+    try {
+      await updateTransaction(txUser, editingTx.id, {
+        date: editDate,
+        time: editTime,
+        fullDate: editFullDate,
+      });
+      setEditTxModalOpen(false);
+      setEditingTx(null);
+      const tx = await fetchTransactions(txUser);
+      setTxs(tx as any[]);
+    } catch (e) {
+      Alert.alert("Update failed", e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  function handleDeleteTx(t: any) {
+    Alert.alert(
+      "Delete Transaction",
+      "Are you sure you want to delete this transaction?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            if (!txUser || !t.id) return;
+            try {
+              await deleteTransaction(txUser, t.id);
+              const tx = await fetchTransactions(txUser);
+              setTxs(tx as any[]);
+            } catch (e) {
+              Alert.alert(
+                "Delete failed",
+                e instanceof Error ? e.message : String(e),
+              );
+            }
+          },
+        },
+      ],
+    );
+  }
+
   const handleCall = (phone: string) => {
     const clean = phone.replace(/[^\d+]/g, "");
     Linking.openURL(`tel:${clean}`).catch((err) =>
@@ -294,7 +354,7 @@ export default function UsersScreen() {
                 </View>
               </View>
 
-              {(u.latitude != null && u.longitude != null) && (
+              {u.latitude != null && u.longitude != null && (
                 <View style={styles.cardLocationRow}>
                   <MaterialDesignIcons
                     name="map-marker-outline"
@@ -486,6 +546,34 @@ export default function UsersScreen() {
                               {t.runningBalance}
                             </Text>
                           )}
+                          <View
+                            style={{
+                              flexDirection: "row",
+                              gap: 12,
+                              marginTop: 8,
+                            }}
+                          >
+                            <Pressable
+                              onPress={() => handleOpenEditTx(t)}
+                              hitSlop={8}
+                            >
+                              <MaterialDesignIcons
+                                name="pencil"
+                                size={18}
+                                color={Brand.blue}
+                              />
+                            </Pressable>
+                            <Pressable
+                              onPress={() => handleDeleteTx(t)}
+                              hitSlop={8}
+                            >
+                              <MaterialDesignIcons
+                                name="delete"
+                                size={18}
+                                color="#D32F2F"
+                              />
+                            </Pressable>
+                          </View>
                         </View>
                       </View>
 
@@ -644,6 +732,70 @@ export default function UsersScreen() {
                 <Text style={styles.btnSubmitText}>
                   {topUpPending ? "Processing..." : "Confirm Top Up"}
                 </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Edit Tx Modal */}
+      <Modal
+        visible={editTxModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setEditTxModalOpen(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Edit Transaction Date</Text>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.modalLabel}>Date (e.g. 14 Jul)</Text>
+              <TextInput
+                style={styles.inputField}
+                value={editDate}
+                onChangeText={setEditDate}
+                placeholder="14 Jul"
+                placeholderTextColor={Brand.textMuted}
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.modalLabel}>Time (e.g. 14:30)</Text>
+              <TextInput
+                style={styles.inputField}
+                value={editTime}
+                onChangeText={setEditTime}
+                placeholder="14:30"
+                placeholderTextColor={Brand.textMuted}
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.modalLabel}>
+                Full Date (e.g. 14 July 2026)
+              </Text>
+              <TextInput
+                style={styles.inputField}
+                value={editFullDate}
+                onChangeText={setEditFullDate}
+                placeholder="14 July 2026"
+                placeholderTextColor={Brand.textMuted}
+              />
+            </View>
+
+            <View style={styles.modalActions}>
+              <Pressable
+                style={[styles.modalActionBtn, styles.btnCancel]}
+                onPress={() => setEditTxModalOpen(false)}
+              >
+                <Text style={styles.btnCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modalActionBtn, styles.btnSubmit]}
+                onPress={handleSaveEditTx}
+              >
+                <Text style={styles.btnSubmitText}>Save</Text>
               </Pressable>
             </View>
           </View>
