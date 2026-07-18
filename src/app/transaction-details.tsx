@@ -7,15 +7,8 @@ import * as Sharing from "expo-sharing";
 import { SymbolView } from "expo-symbols";
 import { useEffect, useState } from "react";
 import {
-  Alert,
-  Linking,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+  Alert, Linking, Platform, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { Text } from "@/components/typography";;
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import type { Transaction } from "@/api";

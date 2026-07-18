@@ -1,6 +1,8 @@
+import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
+import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
-import { Fragment } from "react";
+import { Fragment, useEffect } from "react";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { Provider } from "react-redux";
 import { PersistGate } from "redux-persist/integration/react";
@@ -13,8 +15,27 @@ import { persistor, store } from "@/store";
 
 registerLocationTask();
 
+SplashScreen.preventAutoHideAsync();
+
 export default function RootLayout() {
   const updates = useOTA();
+
+  const [loaded, error] = useFonts({
+    "BentonSans Regular": require("../../assets/fonts/BentonSans Regular.otf"),
+    "BentonSans Bold": require("../../assets/fonts/BentonSans Bold.otf"),
+    "BentonSans Book": require("../../assets/fonts/BentonSans Book.otf"),
+  });
+
+  useEffect(() => {
+    if (loaded || error) {
+      SplashScreen.hideAsync();
+    }
+  }, [loaded, error]);
+
+  if (!loaded && !error) {
+    return null;
+  }
+
   return (
     <Provider store={store}>
       <KeyboardProvider>

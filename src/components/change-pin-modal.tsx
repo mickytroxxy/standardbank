@@ -1,12 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  Modal,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+  Modal, Pressable, StyleSheet, View } from "react-native";
+import { Text, TextInput } from "@/components/typography";;
 
 import { Brand, Spacing } from "@/constants/theme";
 
@@ -34,7 +29,7 @@ export function ChangePinModal({
 }: Props) {
   const [pin, setPin] = useState<string[]>(["", "", "", ""]);
   const [saving, setSaving] = useState(false);
-  const refs = useRef<(TextInput | null)[]>([]);
+  const refs = useRef<Array<import("react-native").TextInput | null>>([]);
 
   useEffect(() => {
     if (visible) {

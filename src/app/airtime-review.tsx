@@ -3,13 +3,8 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { useState } from "react";
 import {
-  Alert,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+  Alert, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { Text } from "@/components/typography";;
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { addTransaction, formatRand, updateBalances } from "@/api";

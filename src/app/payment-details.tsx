@@ -2,21 +2,16 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { useRef, useState } from "react";
 import {
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
-import { KeyboardAvoidingView } from "react-native-keyboard-controller";
+  Pressable, StyleSheet, Switch, View } from "react-native";
+import { FloatingLabelInput } from "@/components/floating-input";
+import { Text, TextInput } from "@/components/typography";;
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AccountCard } from "@/components/account-card";
 import { Brand, Spacing } from "@/constants/theme";
 import { useAppSelector } from "@/store";
+import { DEFAULT_IMMEDIATE_PAYMENT_ERROR } from "@/store/ui-slice";
 import type { ProofMethod } from "./beneficiary-account";
 
 const PROOF_METHODS: ProofMethod[] = ["None", "SMS", "Email", "Fax"];
@@ -62,8 +57,8 @@ export default function PaymentDetailsScreen() {
   const [amount, setAmount] = useState("0.00");
   const [amountTouched, setAmountTouched] = useState(false);
   const [immediate, setImmediate] = useState(false);
-  const allowImmediatePayment = useAppSelector(
-    (s) => s.ui.allowImmediatePayment,
+  const { allowImmediatePayment, immediatePaymentErrorMessage } = useAppSelector(
+    (s) => s.ui,
   );
   const [myRef, setMyRef] = useState(ben.myRef ?? "");
   const [theirRef, setTheirRef] = useState(ben.theirRef ?? "");
@@ -75,7 +70,8 @@ export default function PaymentDetailsScreen() {
   const [theirName, setTheirName] = useState(displayName);
   const [pin, setPin] = useState(["", "", "", ""]);
   const [acceptedTcs, setAcceptedTcs] = useState(false);
-  const pinRefs = useRef<Array<TextInput | null>>([null, null, null, null]);
+  const [toastVisible, setToastVisible] = useState(false);
+  const pinRefs = useRef<Array<import("react-native").TextInput | null>>([null, null, null, null]);
 
   const initial = isCell
     ? `${(ben.name ?? "").charAt(0)}${(ben.surname ?? "").charAt(0)}`.toUpperCase()
@@ -172,285 +168,276 @@ export default function PaymentDetailsScreen() {
         </Pressable>
       </View>
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        style={{ flex: 1 }}
+      <KeyboardAwareScrollView
+        contentContainerStyle={{ paddingBottom: Spacing.six }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        onScrollBeginDrag={() => proofOpen && setProofOpen(false)}
+        bottomOffset={62}
       >
-        <ScrollView
-          contentContainerStyle={{ paddingBottom: Spacing.six }}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-          onScrollBeginDrag={() => proofOpen && setProofOpen(false)}
-        >
-          <View style={styles.fromBlock}>
-            <Text style={styles.fromLabel}>From</Text>
-            <AccountCard
-              name="MYMOACC"
-              accountNumber={accountNumber ?? "—"}
-              availableBalance={availableBalance}
-            />
-            <View style={styles.eapRow}>
-              <Text style={styles.eapLabel}>
-                {isCell
-                  ? "Remaining daily withdrawal limit"
-                  : "Remaining EAP limit"}
-              </Text>
-              <Text style={styles.eapValue}>
-                {isCell ? "R 10 000.00" : "R 49 980.00"}
-              </Text>
+        <View style={styles.fromBlock}>
+          <Text style={styles.fromLabel}>From</Text>
+          <AccountCard
+            name="MYMOACC"
+            accountNumber={accountNumber ?? "—"}
+            availableBalance={availableBalance}
+          />
+          <View style={styles.eapRow}>
+            <Text style={styles.eapLabel}>
+              {isCell
+                ? "Remaining daily withdrawal limit"
+                : "Remaining EAP limit"}
+            </Text>
+            <Text style={styles.eapValue}>
+              {isCell ? "R 10 000.00" : "R 959 980.00"}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.notch} />
+
+        <View style={styles.toBlock}>
+          <Text style={styles.toLabel}>To</Text>
+          <View style={styles.benCard}>
+            <View style={styles.benAvatar}>
+              <Text style={styles.benAvatarText}>{initial || "?"}</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.benName}>{displayName || "—"}</Text>
+              <Text style={styles.benAcc}>{displaySub || "—"}</Text>
+              <Text style={styles.benBank}>{displayBank || "—"}</Text>
             </View>
           </View>
 
-          <View style={styles.notch} />
-
-          <View style={styles.toBlock}>
-            <Text style={styles.toLabel}>To</Text>
-            <View style={styles.benCard}>
-              <View style={styles.benAvatar}>
-                <Text style={styles.benAvatarText}>{initial || "?"}</Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.benName}>{displayName || "—"}</Text>
-                <Text style={styles.benAcc}>{displaySub || "—"}</Text>
-                <Text style={styles.benBank}>{displayBank || "—"}</Text>
-              </View>
+          <View style={styles.amountRow}>
+            <View style={styles.amountCurrency}>
+              <Text style={styles.amountCurrencyText}>R</Text>
             </View>
+            <TextInput
+              style={styles.amountInput}
+              value={amount}
+              onChangeText={(v) => {
+                setAmount(v);
+                setAmountTouched(true);
+              }}
+              keyboardType="decimal-pad"
+              selectTextOnFocus
+            />
+          </View>
+          {errorText && <Text style={styles.errorText}>{errorText}</Text>}
 
-            <View style={styles.amountRow}>
-              <View style={styles.amountCurrency}>
-                <Text style={styles.amountCurrencyText}>R</Text>
-              </View>
-              <TextInput
-                style={styles.amountInput}
-                value={amount}
-                onChangeText={(v) => {
-                  setAmount(v);
-                  setAmountTouched(true);
-                }}
-                keyboardType="decimal-pad"
-                selectTextOnFocus
-              />
-            </View>
-            {errorText && <Text style={styles.errorText}>{errorText}</Text>}
+          {isCell ? (
+            <>
+              <Text style={styles.denomHint}>
+                R 50.00 to R 5 000.00 in denominations of R 10.00
+              </Text>
 
-            {isCell ? (
-              <>
-                <Text style={styles.denomHint}>
-                  R 50.00 to R 5 000.00 in denominations of R 10.00
-                </Text>
-
-                <View style={styles.pinCard}>
-                  <View style={styles.pinHeader}>
-                    <Text style={styles.pinTitle}>Cash Collection Pin</Text>
-                    <View style={styles.infoDot}>
-                      <Text style={styles.infoDotText}>i</Text>
-                    </View>
+              <View style={styles.pinCard}>
+                <View style={styles.pinHeader}>
+                  <Text style={styles.pinTitle}>Cash Collection Pin</Text>
+                  <View style={styles.infoDot}>
+                    <Text style={styles.infoDotText}>i</Text>
                   </View>
-                  <Text style={styles.pinSub}>
-                    Select a PIN or generate it (Remember to send the PIN if
-                    you&apos;re paying someone)
+                </View>
+                <Text style={styles.pinSub}>
+                  Select a PIN or generate it (Remember to send the PIN if
+                  you&apos;re paying someone)
+                </Text>
+                <View style={styles.pinRow}>
+                  {pin.map((d, i) => (
+                    <TextInput
+                      key={i}
+                      ref={(r) => {
+                        pinRefs.current[i] = r;
+                      }}
+                      style={styles.pinInput}
+                      value={d}
+                      onChangeText={(v) => setPinDigit(i, v)}
+                      onKeyPress={({ nativeEvent }) => {
+                        if (
+                          nativeEvent.key === "Backspace" &&
+                          !pin[i] &&
+                          i > 0
+                        ) {
+                          pinRefs.current[i - 1]?.focus();
+                        }
+                      }}
+                      keyboardType="number-pad"
+                      maxLength={1}
+                      selectTextOnFocus
+                    />
+                  ))}
+                </View>
+                <View style={styles.pinFooter}>
+                  <Text style={styles.pinHint}>
+                    Avoid using consecutive numbers (1 2 3 4) or repeating
+                    numbers (1 2 2 4)
                   </Text>
-                  <View style={styles.pinRow}>
-                    {pin.map((d, i) => (
-                      <TextInput
-                        key={i}
-                        ref={(r) => {
-                          pinRefs.current[i] = r;
-                        }}
-                        style={styles.pinInput}
-                        value={d}
-                        onChangeText={(v) => setPinDigit(i, v)}
-                        onKeyPress={({ nativeEvent }) => {
-                          if (
-                            nativeEvent.key === "Backspace" &&
-                            !pin[i] &&
-                            i > 0
-                          ) {
-                            pinRefs.current[i - 1]?.focus();
+                  <Pressable style={styles.generateBtn} onPress={generatePin}>
+                    <Text style={styles.generateBtnText}>GENERATE PIN</Text>
+                  </Pressable>
+                </View>
+                <View style={styles.tcsRow}>
+                  <Text style={styles.tcsText}>
+                    I accept the{" "}
+                    <Text style={styles.tcsLink}>terms &amp; conditions</Text>
+                  </Text>
+                  <Switch
+                    value={acceptedTcs}
+                    onValueChange={setAcceptedTcs}
+                    trackColor={{ false: Brand.divider, true: Brand.blue }}
+                    thumbColor={Brand.white}
+                  />
+                </View>
+              </View>
+
+              <Text style={styles.otherDetailsLabel}>Other details</Text>
+              <Text style={styles.fieldLabel}>My reference</Text>
+              <TextInput
+                style={styles.field}
+                value={myRef}
+                onChangeText={setMyRef}
+              />
+            </>
+          ) : (
+            <>
+                <View style={styles.toggleRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.toggleTitle}>Immediate payment</Text>
+                    <Text style={styles.toggleSub}>
+                      You&apos;ll be charged a fee based on the payment amount
+                    </Text>
+                  </View>
+                  <View style={styles.infoDot}>
+                    <Text style={styles.infoDotText}>i</Text>
+                  </View>
+                  <Switch
+                    value={immediate}
+                    onValueChange={(val) => {
+                      if (!allowImmediatePayment && val) {
+                        setToastVisible(true);
+                        setTimeout(() => setToastVisible(false), 3500);
+                        return;
+                      }
+                      setImmediate(val);
+                    }}
+                    trackColor={{ false: Brand.divider, true: Brand.blue }}
+                    thumbColor={Brand.white}
+                    style={{ marginLeft: Spacing.two }}
+                  />
+                </View>
+
+              <FloatingLabelInput
+                label="My reference"
+                value={myRef}
+                onChangeText={setMyRef}
+              />
+
+              <FloatingLabelInput
+                label="Their reference"
+                value={theirRef}
+                onChangeText={setTheirRef}
+              />
+
+              <Text style={styles.fieldLabel}>Proof of payment</Text>
+              <View>
+                <Pressable
+                  style={styles.dropdownRow}
+                  onPress={() => setProofOpen((v) => !v)}
+                >
+                  <Text style={styles.dropdownValue}>{proof}</Text>
+                  <SymbolView
+                    name={
+                      proofOpen
+                        ? {
+                            ios: "chevron.up",
+                            android: "keyboard_arrow_up",
+                            web: "keyboard_arrow_up",
                           }
+                        : {
+                            ios: "chevron.down",
+                            android: "keyboard_arrow_down",
+                            web: "keyboard_arrow_down",
+                          }
+                    }
+                    size={20}
+                    tintColor={Brand.blue}
+                  />
+                </Pressable>
+                {proofOpen && (
+                  <View style={styles.dropdownMenu}>
+                    {PROOF_METHODS.map((m) => (
+                      <Pressable
+                        key={m}
+                        style={styles.dropdownItem}
+                        onPress={() => {
+                          setProof(m);
+                          setProofOpen(false);
                         }}
-                        keyboardType="number-pad"
-                        maxLength={1}
-                        selectTextOnFocus
-                      />
+                      >
+                        <Text style={styles.dropdownItemText}>{m}</Text>
+                      </Pressable>
                     ))}
                   </View>
-                  <View style={styles.pinFooter}>
-                    <Text style={styles.pinHint}>
-                      Avoid using consecutive numbers (1 2 3 4) or repeating
-                      numbers (1 2 2 4)
-                    </Text>
-                    <Pressable style={styles.generateBtn} onPress={generatePin}>
-                      <Text style={styles.generateBtnText}>GENERATE PIN</Text>
-                    </Pressable>
-                  </View>
-                  <View style={styles.tcsRow}>
-                    <Text style={styles.tcsText}>
-                      I accept the{" "}
-                      <Text style={styles.tcsLink}>terms &amp; conditions</Text>
-                    </Text>
-                    <Switch
-                      value={acceptedTcs}
-                      onValueChange={setAcceptedTcs}
-                      trackColor={{ false: Brand.divider, true: Brand.blue }}
-                      thumbColor={Brand.white}
-                    />
-                  </View>
-                </View>
-
-                <Text style={styles.otherDetailsLabel}>Other details</Text>
-                <Text style={styles.fieldLabel}>My reference</Text>
-                <TextInput
-                  style={styles.field}
-                  value={myRef}
-                  onChangeText={setMyRef}
-                />
-              </>
-            ) : (
-              <>
-                {allowImmediatePayment && (
-                  <View style={styles.toggleRow}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.toggleTitle}>Immediate payment</Text>
-                      <Text style={styles.toggleSub}>
-                        You&apos;ll be charged a fee based on the payment amount
-                      </Text>
-                    </View>
-                    <View style={styles.infoDot}>
-                      <Text style={styles.infoDotText}>i</Text>
-                    </View>
-                    <Switch
-                      value={immediate}
-                      onValueChange={setImmediate}
-                      trackColor={{ false: Brand.divider, true: Brand.blue }}
-                      thumbColor={Brand.white}
-                      style={{ marginLeft: Spacing.two }}
-                    />
-                  </View>
                 )}
+              </View>
 
-                <Text style={styles.fieldLabel}>My reference</Text>
-                <TextInput
-                  style={styles.field}
-                  value={myRef}
-                  onChangeText={setMyRef}
-                />
-
-                <Text style={styles.fieldLabel}>Their reference</Text>
-                <TextInput
-                  style={styles.field}
-                  value={theirRef}
-                  onChangeText={setTheirRef}
-                />
-
-                <Text style={styles.fieldLabel}>Proof of payment</Text>
-                <View>
-                  <Pressable
-                    style={styles.dropdownRow}
-                    onPress={() => setProofOpen((v) => !v)}
-                  >
-                    <Text style={styles.dropdownValue}>{proof}</Text>
+              {proof === "SMS" && (
+                <FloatingLabelInput
+                  label="Cell phone number"
+                  value={proofContact}
+                  onChangeText={setProofContact}
+                  keyboardType="phone-pad"
+                  rightAccessory={
                     <SymbolView
-                      name={
-                        proofOpen
-                          ? {
-                              ios: "chevron.up",
-                              android: "keyboard_arrow_up",
-                              web: "keyboard_arrow_up",
-                            }
-                          : {
-                              ios: "chevron.down",
-                              android: "keyboard_arrow_down",
-                              web: "keyboard_arrow_down",
-                            }
-                      }
-                      size={20}
+                      name={{
+                        ios: "plus.circle",
+                        android: "add_circle",
+                        web: "add_circle",
+                      }}
+                      size={26}
                       tintColor={Brand.blue}
                     />
-                  </Pressable>
-                  {proofOpen && (
-                    <View style={styles.dropdownMenu}>
-                      {PROOF_METHODS.map((m) => (
-                        <Pressable
-                          key={m}
-                          style={styles.dropdownItem}
-                          onPress={() => {
-                            setProof(m);
-                            setProofOpen(false);
-                          }}
-                        >
-                          <Text style={styles.dropdownItemText}>{m}</Text>
-                        </Pressable>
-                      ))}
-                    </View>
-                  )}
-                </View>
+                  }
+                />
+              )}
+              {proof === "Email" && (
+                <FloatingLabelInput
+                  label="Email address"
+                  value={proofContact}
+                  onChangeText={setProofContact}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              )}
+              {proof === "Fax" && (
+                <FloatingLabelInput
+                  label="Fax number"
+                  value={proofContact}
+                  onChangeText={setProofContact}
+                  keyboardType="phone-pad"
+                />
+              )}
 
-                {proof === "SMS" && (
-                  <>
-                    <Text style={styles.fieldLabel}>Cell phone number</Text>
-                    <View style={styles.contactRow}>
-                      <TextInput
-                        style={[
-                          styles.field,
-                          { flex: 1, borderBottomWidth: 0 },
-                        ]}
-                        value={proofContact}
-                        onChangeText={setProofContact}
-                        keyboardType="phone-pad"
-                      />
-                      <SymbolView
-                        name={{
-                          ios: "plus.circle",
-                          android: "add_circle",
-                          web: "add_circle",
-                        }}
-                        size={26}
-                        tintColor={Brand.blue}
-                      />
-                    </View>
-                  </>
-                )}
-                {proof === "Email" && (
-                  <>
-                    <Text style={styles.fieldLabel}>Email address</Text>
-                    <TextInput
-                      style={styles.field}
-                      value={proofContact}
-                      onChangeText={setProofContact}
-                      keyboardType="email-address"
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                    />
-                  </>
-                )}
-                {proof === "Fax" && (
-                  <>
-                    <Text style={styles.fieldLabel}>Fax number</Text>
-                    <TextInput
-                      style={styles.field}
-                      value={proofContact}
-                      onChangeText={setProofContact}
-                      keyboardType="phone-pad"
-                    />
-                  </>
-                )}
-
-                {proof !== "None" && (
-                  <>
-                    <Text style={styles.fieldLabel}>Their name</Text>
-                    <TextInput
-                      style={styles.field}
-                      value={theirName}
-                      onChangeText={setTheirName}
-                    />
-                  </>
-                )}
-              </>
-            )}
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+              {proof !== "None" && (
+                <FloatingLabelInput
+                  label="Their name"
+                  value={theirName}
+                  onChangeText={setTheirName}
+                />
+              )}
+            </>
+          )}
+        </View>
+      </KeyboardAwareScrollView>
+      {toastVisible && (
+        <View style={[styles.toast, { bottom: insets.bottom + Spacing.three }]}>
+          <Text style={styles.toastText}>
+            {immediatePaymentErrorMessage || DEFAULT_IMMEDIATE_PAYMENT_ERROR}
+          </Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -704,4 +691,21 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     marginTop: Spacing.four,
   },
+  toast: {
+    position: "absolute",
+    left: Spacing.three,
+    right: Spacing.three,
+    backgroundColor: "#333333",
+    padding: Spacing.three,
+    borderRadius: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    elevation: 4,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+  },
+  toastText: { color: Brand.white, fontSize: 15 },
 });

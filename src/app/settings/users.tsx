@@ -1,14 +1,5 @@
-import {
-  deleteAccount,
-  deleteTransaction,
-  fetchAllAccounts,
-  fetchTransactions,
-  formatRand,
-  onAccountsUpdate,
-  setAccountActive,
-  topUpUserAccount,
-  updateTransaction,
-} from "@/api";
+import { deleteAccount, deleteTransaction, fetchAllAccounts, fetchTransactions, formatRand, onAccountsUpdate, setAccountActive, topUpUserAccount, updateAccountInfo, updateTransaction, } from "@/api";
+import { sendPushNotificationToUser } from "@/services/pushNotifications";
 import { Brand, Spacing } from "@/constants/theme";
 import { useAppDispatch } from "@/store";
 import { hideLoader, showLoader } from "@/store/ui-slice";
@@ -16,17 +7,8 @@ import { MaterialDesignIcons } from "@react-native-vector-icons/material-design-
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  Linking,
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+  ActivityIndicator, Alert, Linking, Modal, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { Text, TextInput } from "@/components/typography";;
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 function isEmail(val?: string): boolean {
@@ -82,6 +64,11 @@ export default function UsersScreen() {
   const [editDate, setEditDate] = useState("");
   const [editTime, setEditTime] = useState("");
   const [editFullDate, setEditFullDate] = useState("");
+
+  const [editNameModalOpen, setEditNameModalOpen] = useState(false);
+  const [editNameUser, setEditNameUser] = useState<any | null>(null);
+  const [editFirstName, setEditFirstName] = useState("");
+  const [editLastName, setEditLastName] = useState("");
 
   const loadInitial = useCallback(async () => {
     setIsLoading(true);
@@ -187,6 +174,15 @@ export default function UsersScreen() {
         amount,
         topUpRef.trim(),
       );
+
+      // Send a remote push notification to the recipient
+      await sendPushNotificationToUser(
+        selectedUser.phoneNumber,
+        "💳 Funds Received",
+        `R${amount.toFixed(2)} has been credited to your account. Ref: ${topUpRef.trim()}`,
+        { type: "top_up", amount, reference: topUpRef.trim() },
+      );
+
       setTopUpModalOpen(false);
       setSelectedUser(null);
       loadInitial();
@@ -285,6 +281,34 @@ export default function UsersScreen() {
       Alert.alert("Error", "Could not open email client: " + err.message),
     );
   };
+
+  function handleOpenEditName(u: any) {
+    setEditNameUser(u);
+    setEditFirstName(u.firstName || "");
+    setEditLastName(u.lastName || "");
+    setEditNameModalOpen(true);
+  }
+
+  async function handleSaveName() {
+    if (!editNameUser) return;
+    const first = editFirstName.trim();
+    const last = editLastName.trim();
+    if (!first || !last) {
+      Alert.alert("Validation", "Please enter both first and last name.");
+      return;
+    }
+    try {
+      await updateAccountInfo(editNameUser.phoneNumber, {
+        firstName: first,
+        lastName: last,
+      });
+      setEditNameModalOpen(false);
+      setEditNameUser(null);
+      loadInitial();
+    } catch (e) {
+      Alert.alert("Update failed", e instanceof Error ? e.message : String(e));
+    }
+  }
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + Spacing.two }]}>
@@ -448,6 +472,17 @@ export default function UsersScreen() {
                     name="delete-outline"
                     size={20}
                     color="#D32F2F"
+                  />
+                </Pressable>
+
+                <Pressable
+                  style={styles.btnEdit}
+                  onPress={() => handleOpenEditName(u)}
+                >
+                  <MaterialDesignIcons
+                    name="pencil-outline"
+                    size={20}
+                    color={Brand.blue}
                   />
                 </Pressable>
               </View>
@@ -801,6 +836,61 @@ export default function UsersScreen() {
           </View>
         </View>
       </Modal>
+      {/* Edit Name Modal */}
+      <Modal
+        visible={editNameModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setEditNameModalOpen(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Edit Full Name</Text>
+            <Text style={styles.modalSubtitle}>
+              Updating name for {editNameUser?.phoneNumber}
+            </Text>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.modalLabel}>First name</Text>
+              <TextInput
+                style={styles.inputField}
+                value={editFirstName}
+                onChangeText={setEditFirstName}
+                placeholder="First name"
+                placeholderTextColor={Brand.textMuted}
+                autoCapitalize="words"
+              />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.modalLabel}>Last name</Text>
+              <TextInput
+                style={styles.inputField}
+                value={editLastName}
+                onChangeText={setEditLastName}
+                placeholder="Last name"
+                placeholderTextColor={Brand.textMuted}
+                autoCapitalize="words"
+              />
+            </View>
+
+            <View style={styles.modalActions}>
+              <Pressable
+                style={[styles.modalActionBtn, styles.btnCancel]}
+                onPress={() => setEditNameModalOpen(false)}
+              >
+                <Text style={styles.btnCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modalActionBtn, styles.btnSubmit]}
+                onPress={handleSaveName}
+              >
+                <Text style={styles.btnSubmitText}>Save</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -995,6 +1085,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#FFCDD2",
     backgroundColor: "#FFEBEE",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  btnEdit: {
+    width: 38,
+    height: 38,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Brand.divider,
+    backgroundColor: "#E3F2FD",
     justifyContent: "center",
     alignItems: "center",
   },

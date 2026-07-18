@@ -90,6 +90,7 @@ export type BankBeneficiary = {
   theirRef: string;
   myRef: string;
   proof: string;
+  proofContact?: string;
 };
 
 export type CellBeneficiary = {
@@ -361,8 +362,8 @@ export async function topUpUserAccount(
 
   await addTransaction(userPhoneNumber, {
     date,
-    title: "PAYMENT RECEIVED",
-    sub: `Deposit from ${adminPhoneNumber ?? "Admin"}`,
+    title: reference,
+    sub: `PAYMENT RECEIVED`,
     amount: `+${amount.toFixed(2)}`,
     credit: true,
     fullDate,

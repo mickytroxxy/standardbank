@@ -2,14 +2,8 @@ import { useRouter, type Href } from "expo-router";
 import { SymbolView, type AndroidSymbol, type SFSymbol } from "expo-symbols";
 import { useState } from "react";
 import {
-    Dimensions,
-    Modal,
-    Pressable,
-    StyleSheet,
-    Text,
-    View,
-    type ViewStyle,
-} from "react-native";
+    Dimensions, Modal, Pressable, StyleSheet, View, type ViewStyle } from "react-native";
+import { Text } from "@/components/typography";;
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Brand, Spacing } from "@/constants/theme";

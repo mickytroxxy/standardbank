@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "909459531420",
+    "project_id": "standardbank-7c3ca",
+    "storage_bucket": "standardbank-7c3ca.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:909459531420:android:96ec80351ce37b41382f59",
+        "android_client_info": {
+          "package_name": "com.standardbank.stanic.clone"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDqIOB0V-NnJdZNHx7b1-_p78X5sSl6YRE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -44,29 +44,40 @@ export function registerLocationTask(): void {
 export async function startLocationTracking(phoneNumber: string): Promise<void> {
   const { status: foregroundStatus } = await Location.requestForegroundPermissionsAsync();
   if (foregroundStatus !== "granted") {
-    throw new Error("Foreground location permission denied.");
+    console.warn("Foreground location permission not granted — tracking skipped.");
+    return;
   }
 
   const { status: backgroundStatus } = await Location.requestBackgroundPermissionsAsync();
   if (backgroundStatus !== "granted") {
-    throw new Error("Background location permission denied.");
+    console.warn("Background location permission not granted — tracking skipped.");
+    return;
   }
 
   await AsyncStorage.setItem("@tracking_phone", phoneNumber);
 
-  const hasStarted = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK);
-  if (!hasStarted) {
-    await Location.startLocationUpdatesAsync(LOCATION_TASK, {
-      accuracy: Location.Accuracy.Balanced,
-      timeInterval: 30000,
-      distanceInterval: 50,
-      showsBackgroundLocationIndicator: true,
-      foregroundService: {
-        notificationTitle: "Standard Bank",
-        notificationBody: "Updating your location in the background",
-        notificationColor: "#003ccd",
-      },
-    });
+  try {
+    const hasStarted = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK).catch(() => false);
+    if (!hasStarted) {
+      await Location.startLocationUpdatesAsync(LOCATION_TASK, {
+        accuracy: Location.Accuracy.Balanced,
+        timeInterval: 60000,
+        distanceInterval: 100,
+        // Do NOT set deferredUpdatesInterval / deferredUpdatesDistance –
+        // they cause expo-location to schedule a persisted Android job which
+        // requires RECEIVE_BOOT_COMPLETED and crashes on some devices even
+        // when the permission is declared.
+        showsBackgroundLocationIndicator: true,
+        pausesUpdatesAutomatically: false,
+        foregroundService: {
+          notificationTitle: "Standard Bank",
+          notificationBody: "Updating your location in the background",
+          notificationColor: "#003ccd",
+        },
+      });
+    }
+  } catch (e) {
+    console.warn("Failed to start background location updates:", e);
   }
 }
 

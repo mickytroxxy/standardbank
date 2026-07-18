@@ -2,18 +2,22 @@ import { Brand, Spacing } from "@/constants/theme";
 import { useAppDispatch, useAppSelector } from "@/store";
 import {
     setAllowImmediatePayment,
+    setImmediatePaymentErrorMessage,
     setAllowStandardBankTransfers,
+    DEFAULT_IMMEDIATE_PAYMENT_ERROR,
 } from "@/store/ui-slice";
 import { useRouter } from "expo-router";
-import { Pressable, StyleSheet, Switch, Text, View } from "react-native";
+import { Pressable, StyleSheet, Switch, View } from "react-native";
+import { Text } from "@/components/typography";;
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SymbolView } from "expo-symbols";
+import { FloatingLabelInput } from "@/components/floating-input";
 
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const dispatch = useAppDispatch();
   const router = useRouter();
-  const { allowImmediatePayment, allowStandardBankTransfers } = useAppSelector(
+  const { allowImmediatePayment, immediatePaymentErrorMessage, allowStandardBankTransfers } = useAppSelector(
     (s) => s.ui,
   );
   const phoneNumber = useAppSelector((s) => s.accountInfo.phoneNumber);
@@ -58,6 +62,17 @@ export default function SettingsScreen() {
             thumbColor={Brand.white}
           />
         </View>
+
+        {!allowImmediatePayment && (
+          <View style={{ paddingBottom: Spacing.three, paddingTop: Spacing.two }}>
+            <FloatingLabelInput
+              label="Custom error message"
+              value={immediatePaymentErrorMessage || DEFAULT_IMMEDIATE_PAYMENT_ERROR}
+              onChangeText={(v) => dispatch(setImmediatePaymentErrorMessage(v))}
+              hint="This message is shown to users when they try to enable immediate payments."
+            />
+          </View>
+        )}
 
         <View style={styles.row}>
           <View style={{ flex: 1 }}>

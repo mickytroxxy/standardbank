@@ -1,17 +1,14 @@
+import { Text } from "@/components/typography";
 import { useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import {
-  Animated,
   Pressable,
-  ScrollView,
   StyleSheet,
   Switch,
-  Text,
-  TextInput,
-  View,
-  type TextInputProps,
+  View
 } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { saveBeneficiary, type CellBeneficiary } from "@/api";
@@ -19,121 +16,7 @@ import { Brand, Spacing } from "@/constants/theme";
 import { useAppDispatch, useAppSelector } from "@/store";
 import { hideLoader, showLoader } from "@/store/ui-slice";
 
-type FloatingFieldProps = {
-  label: string;
-  value: string;
-  onChangeText: (v: string) => void;
-  keyboardType?: TextInputProps["keyboardType"];
-  hint?: string;
-  rightAccessory?: React.ReactNode;
-  prefix?: string;
-};
-
-function FloatingLabelInput({
-  label,
-  value,
-  onChangeText,
-  keyboardType,
-  hint,
-  rightAccessory,
-  prefix,
-}: FloatingFieldProps) {
-  const [focused, setFocused] = useState(false);
-  const floated = focused || value.length > 0;
-  const anim = useRef(new Animated.Value(floated ? 1 : 0)).current;
-
-  useEffect(() => {
-    Animated.timing(anim, {
-      toValue: floated ? 1 : 0,
-      duration: 150,
-      useNativeDriver: false,
-    }).start();
-  }, [floated, anim]);
-
-  const labelTop = anim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [22, 0],
-  });
-  const labelSize = anim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [17, 12],
-  });
-  const labelColor = anim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [Brand.textMuted, Brand.textMuted],
-  });
-
-  return (
-    <View style={floatStyles.wrap}>
-      <Animated.Text
-        pointerEvents="none"
-        style={[
-          floatStyles.label,
-          { top: labelTop, fontSize: labelSize, color: labelColor },
-        ]}
-      >
-        {label}
-      </Animated.Text>
-      <View style={floatStyles.inputRow}>
-        {prefix && floated ? (
-          <Text style={floatStyles.prefix}>{prefix}</Text>
-        ) : null}
-        <TextInput
-          style={floatStyles.input}
-          value={value}
-          onChangeText={onChangeText}
-          onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
-          keyboardType={keyboardType}
-          underlineColorAndroid="transparent"
-        />
-        {rightAccessory ? (
-          <View style={floatStyles.accessory}>{rightAccessory}</View>
-        ) : null}
-      </View>
-      {hint ? <Text style={floatStyles.hint}>{hint}</Text> : null}
-    </View>
-  );
-}
-
-const floatStyles = StyleSheet.create({
-  wrap: {
-    marginTop: Spacing.three,
-    paddingTop: 14,
-  },
-  label: {
-    position: "absolute",
-    left: 0,
-    color: Brand.textMuted,
-  },
-  inputRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderBottomWidth: 1,
-    borderBottomColor: Brand.divider,
-  },
-  prefix: {
-    fontSize: 17,
-    color: Brand.navy,
-    paddingVertical: Spacing.one,
-    paddingRight: 4,
-  },
-  input: {
-    flex: 1,
-    fontSize: 17,
-    color: Brand.navy,
-    paddingVertical: Spacing.one,
-    paddingHorizontal: 0,
-    margin: 0,
-  },
-  accessory: { paddingLeft: Spacing.two },
-  hint: {
-    color: Brand.textMuted,
-    fontSize: 13,
-    marginTop: Spacing.one,
-  },
-});
-
+import { FloatingLabelInput } from "@/components/floating-input";
 export default function BeneficiaryCellScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -211,10 +94,11 @@ export default function BeneficiaryCellScreen() {
         </Pressable>
       </View>
 
-      <ScrollView
+      <KeyboardAwareScrollView
         style={styles.scroll}
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
+        bottomOffset={62}
       >
         <View style={styles.avatarWrap}>
           <View style={styles.avatar}>
@@ -286,7 +170,7 @@ export default function BeneficiaryCellScreen() {
             thumbColor={Brand.white}
           />
         </View>
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </View>
   );
 }

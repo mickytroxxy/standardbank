@@ -2,16 +2,10 @@ import { useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { useEffect, useState } from "react";
 import {
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
-import { KeyboardAvoidingView } from "react-native-keyboard-controller";
+  Pressable, StyleSheet, Switch, View } from "react-native";
+import { FloatingLabelInput } from "@/components/floating-input";
+import { Text, TextInput } from "@/components/typography";;
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { saveBeneficiary, type BankBeneficiary } from "@/api";
@@ -59,10 +53,12 @@ export default function BeneficiaryAccountScreen() {
   const [myRef, setMyRef] = useState("");
   const [proof, setProof] = useState<ProofMethod>("None");
   const [proofOpen, setProofOpen] = useState(false);
+  const [proofContact, setProofContact] = useState("");
   const [save, setSave] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (selectedBank && selectedBank !== bank) setBank(selectedBank);
     if (selectedBank) dispatch(clearSelectedBank());
   }, [selectedBank, bank, dispatch]);
@@ -83,6 +79,7 @@ export default function BeneficiaryAccountScreen() {
       theirRef,
       myRef,
       proof,
+      proofContact,
       save,
     };
     if (save && phoneNumber) {
@@ -99,6 +96,7 @@ export default function BeneficiaryAccountScreen() {
           theirRef: ben.theirRef,
           myRef: ben.myRef,
           proof: ben.proof,
+          proofContact: ben.proofContact,
         };
         await saveBeneficiary(phoneNumber, payload);
       } catch {
@@ -139,16 +137,13 @@ export default function BeneficiaryAccountScreen() {
         </Pressable>
       </View>
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        style={{ flex: 1 }}
+      <KeyboardAwareScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        onScrollBeginDrag={() => proofOpen && setProofOpen(false)}
+        bottomOffset={62}
       >
-        <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={styles.content}
-          keyboardShouldPersistTaps="handled"
-          onScrollBeginDrag={() => proofOpen && setProofOpen(false)}
-        >
           <View style={styles.avatarWrap}>
             <View style={styles.avatar}>
               {initial ? (
@@ -172,14 +167,12 @@ export default function BeneficiaryAccountScreen() {
 
           <Text style={styles.sectionLabel}>Account details</Text>
 
-          <Text style={styles.fieldLabel}>Account holder name</Text>
-          <TextInput
-            style={styles.field}
+          <FloatingLabelInput
+            label="Account holder name"
             value={holderName}
             onChangeText={setHolderName}
-            placeholderTextColor={Brand.textMuted}
+            hint="Enter account holder name/s"
           />
-          <Text style={styles.fieldHint}>Enter account holder name/s</Text>
 
           <Text style={styles.fieldLabel}>Bank</Text>
           <Pressable
@@ -221,9 +214,8 @@ export default function BeneficiaryAccountScreen() {
             </Text>
           </View>
 
-          <Text style={styles.fieldLabel}>Account number</Text>
-          <TextInput
-            style={styles.field}
+          <FloatingLabelInput
+            label="Account number"
             value={accountNum}
             onChangeText={setAccountNum}
             keyboardType="number-pad"
@@ -242,18 +234,14 @@ export default function BeneficiaryAccountScreen() {
             Other details
           </Text>
 
-          <Text style={styles.fieldLabel}>Their reference</Text>
-          <TextInput
-            style={styles.field}
+          <FloatingLabelInput
+            label="Their reference"
             value={theirRef}
             onChangeText={setTheirRef}
           />
 
-          <Text style={[styles.fieldLabel, { marginTop: Spacing.three }]}>
-            My reference
-          </Text>
-          <TextInput
-            style={styles.field}
+          <FloatingLabelInput
+            label="My reference"
             value={myRef}
             onChangeText={setMyRef}
           />
@@ -303,6 +291,30 @@ export default function BeneficiaryAccountScreen() {
             )}
           </View>
 
+          {proof !== "None" && (
+            <>
+              <FloatingLabelInput
+                label={
+                  proof === "SMS"
+                    ? "Notification cell number"
+                    : proof === "Email"
+                      ? "Notification email address"
+                      : "Notification fax number"
+                }
+                value={proofContact}
+                onChangeText={setProofContact}
+                keyboardType={
+                  proof === "SMS"
+                    ? "phone-pad"
+                    : proof === "Fax"
+                      ? "number-pad"
+                      : "email-address"
+                }
+                autoCapitalize="none"
+              />
+            </>
+          )}
+
           <View style={styles.saveRow}>
             <Text style={styles.saveLabel}>Save this beneficiary</Text>
             <Switch
@@ -312,8 +324,7 @@ export default function BeneficiaryAccountScreen() {
               thumbColor={Brand.white}
             />
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </View>
   );
 }
@@ -417,19 +428,16 @@ const styles = StyleSheet.create({
   },
   dropdownValue: { flex: 1, fontSize: 17, color: Brand.textDark },
   dropdownMenu: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    top: 48,
     backgroundColor: Brand.white,
+    borderWidth: 1,
+    borderColor: Brand.divider,
     borderRadius: 4,
-    paddingVertical: Spacing.one,
-    elevation: 6,
+    marginTop: 4,
+    elevation: 3,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.18,
-    shadowRadius: 6,
-    zIndex: 10,
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   dropdownItem: {
     paddingHorizontal: Spacing.three,

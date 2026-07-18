@@ -2,15 +2,9 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { useState } from "react";
 import {
-    Platform,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
-} from "react-native";
-import { KeyboardAvoidingView } from "react-native-keyboard-controller";
+    Pressable, StyleSheet, View } from "react-native";
+import { Text, TextInput } from "@/components/typography";;
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AccountCard } from "@/components/account-card";
@@ -75,11 +69,10 @@ export default function AirtimePurchaseScreen() {
         <Text style={styles.headerTitle}>Purchase details</Text>
       </View>
 
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        style={{ flex: 1 }}
+      <KeyboardAwareScrollView
+        contentContainerStyle={{ paddingBottom: Spacing.six }}
+        bottomOffset={62}
       >
-        <ScrollView contentContainerStyle={{ paddingBottom: Spacing.six }}>
           <View style={styles.fromBlock}>
             <Text style={styles.fromLabel}>Pay from</Text>
             <AccountCard
@@ -147,30 +140,29 @@ export default function AirtimePurchaseScreen() {
               </View>
             </View>
           </View>
-        </ScrollView>
+      </KeyboardAwareScrollView>
 
-        <View
-          style={[
-            styles.footer,
-            { paddingBottom: insets.bottom + Spacing.two },
-          ]}
+      <View
+        style={[
+          styles.footer,
+          { paddingBottom: insets.bottom + Spacing.two },
+        ]}
+      >
+        <Pressable
+          style={[styles.nextBtn, !canNext && styles.nextBtnDisabled]}
+          onPress={handleNext}
+          disabled={!canNext}
         >
-          <Pressable
-            style={[styles.nextBtn, !canNext && styles.nextBtnDisabled]}
-            onPress={handleNext}
-            disabled={!canNext}
+          <Text
+            style={[
+              styles.nextBtnText,
+              !canNext && styles.nextBtnTextDisabled,
+            ]}
           >
-            <Text
-              style={[
-                styles.nextBtnText,
-                !canNext && styles.nextBtnTextDisabled,
-              ]}
-            >
-              NEXT
-            </Text>
-          </Pressable>
-        </View>
-      </KeyboardAvoidingView>
+            NEXT
+          </Text>
+        </Pressable>
+      </View>
     </View>
   );
 }

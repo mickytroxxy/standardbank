@@ -1,6 +1,7 @@
+import { Text } from "@/components/typography";
 import { useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { formatRand } from "@/api";
@@ -42,6 +43,9 @@ export default function HomeScreen() {
   //   if (!phoneNumber) return;
   //   startLocationTracking(phoneNumber).catch((e) =>
   //     console.warn("Location tracking failed:", e),
+  //   );
+  //   registerForPushNotifications(phoneNumber).catch((e) =>
+  //     console.warn("Push notification registration failed:", e),
   //   );
   // }, [phoneNumber]);
 

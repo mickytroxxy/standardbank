@@ -2,8 +2,8 @@ import Ionicons from "@react-native-vector-icons/ionicons";
 import { useFocusEffect, useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { useCallback, useState } from "react";
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { KeyboardAvoidingView } from "react-native-keyboard-controller";
+import { Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { Text } from "@/components/typography";;
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { fetchTransactions, formatRand, type Transaction } from "@/api";
@@ -306,10 +306,7 @@ export default function AccountDetailScreen() {
         </ScrollView>
       </View>
 
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-      >
+      <View style={{ flex: 1 }}>
         {tab === "overview" && (
         <ScrollView style={styles.scroll}>
           <View style={styles.balSection}>
@@ -479,7 +476,7 @@ export default function AccountDetailScreen() {
           </Text>
         </View>
       )}
-      </KeyboardAvoidingView>
+      </View>
     </View>
   );
 }

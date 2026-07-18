@@ -1,13 +1,8 @@
 import { Redirect, useRouter } from "expo-router";
 import { SymbolView, type AndroidSymbol, type SFSymbol } from "expo-symbols";
 import {
-  Dimensions,
-  Image,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+  Dimensions, Image, Pressable, StyleSheet, View } from "react-native";
+import { Text } from "@/components/typography";;
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { displayName } from "@/api";

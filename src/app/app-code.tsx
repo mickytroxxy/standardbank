@@ -2,7 +2,8 @@ import { MaterialDesignIcons } from "@react-native-vector-icons/material-design-
 import { useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { useEffect, useRef, useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
+import { Text, TextInput } from "@/components/typography";;
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { signIn } from "@/api";
@@ -17,7 +18,7 @@ export default function AppCodeScreen() {
   const router = useRouter();
   const dispatch = useAppDispatch();
   const phoneNumber = useAppSelector((s) => s.accountInfo.phoneNumber);
-  const inputRef = useRef<TextInput>(null);
+  const inputRef = useRef<import("react-native").TextInput>(null);
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
 
